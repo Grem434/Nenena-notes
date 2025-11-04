@@ -1,0 +1,17 @@
+[build]
+  base = "apps/web"
+  command = "npm ci && npm run build"
+  publish = "apps/web/dist"
+
+# SPA: refrescos de página sin 404
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Cabeceras recomendadas
+[[headers]]
+  for = "/*"
+  [headers.values]
+  X-Content-Type-Options = "nosniff"
+  Referrer-Policy = "strict-origin-when-cross-origin"
