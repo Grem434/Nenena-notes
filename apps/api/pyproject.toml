@@ -1,0 +1,18 @@
+[project]
+name = "nenena-notes-api"
+version = "0.1.0"
+description = "Nenena Notes API (MVP)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi==0.115.0",
+    "uvicorn[standard]==0.30.6",
+    "pydantic-settings==2.4.0",
+    "python-multipart==0.0.9",
+    "email-validator==2.2.0"
+]
+
+[tool.uvicorn]
+factory = false
+reload = true
+host = "0.0.0.0"
+port = 8000

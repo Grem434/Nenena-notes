@@ -1,0 +1,124 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==== Base Nenena ======================================================= */
+:root{
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --nenena-brand:#f2718e;
+  --nenena-brand-50:#fde7ed;
+}
+
+html{height:100%;-webkit-text-size-adjust:100%}
+body{
+  @apply bg-white text-slate-800 antialiased;
+  min-height:100%;
+  -webkit-tap-highlight-color:transparent;
+  text-rendering:optimizeLegibility;
+}
+
+/* Selección */
+::selection{background:color-mix(in oklab,var(--nenena-brand) 24%,white);color:#1f2937}
+::-moz-selection{background:color-mix(in oklab,var(--nenena-brand) 24%,white);color:#1f2937}
+
+/* Placeholders */
+::placeholder{color:#9aa4b2;opacity:1}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:#f4b6c5;border-radius:10px}
+::-webkit-scrollbar-track{background:#fff}
+
+/* Foco accesible */
+*:focus-visible{
+  outline:2px solid color-mix(in oklab,var(--nenena-brand) 55%, #fff 45%);
+  outline-offset:2px;
+  box-shadow:0 0 0 4px color-mix(in oklab,var(--nenena-brand) 22%, transparent);
+  border-radius:10px
+}
+.focus-visible\:ring-0:focus-visible{outline:none!important;box-shadow:none!important}
+
+/* Reduced motion */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation-duration:.001ms!important;
+    animation-iteration-count:1!important;
+    transition-duration:.001ms!important;
+    scroll-behavior:auto!important
+  }
+}
+
+/* Utilidades */
+@layer utilities{
+  .ios-safe-bottom{padding-bottom:var(--safe-bottom)}
+  .nenena-soft-bg{background-color:var(--nenena-brand-50)}
+  .nenena-accent{color:var(--nenena-brand)}
+  @media (max-width:768px){
+    input,select,textarea{font-size:16px!important}
+  }
+}
+
+/* ==== Tooltip minimalista =============================================== */
+[data-tooltip]{position:relative}
+[data-tooltip]::after{
+  content:attr(data-tooltip);
+  position:absolute;bottom:calc(100% + 8px);left:50%;
+  transform:translateX(-50%) translateY(2px);
+  background:rgba(17,24,39,.95);color:#fff;
+  padding:6px 8px;border-radius:8px;font-size:12px;line-height:1;
+  box-shadow:0 6px 18px rgba(0,0,0,.12);white-space:nowrap;
+  opacity:0;pointer-events:none;z-index:60;
+  transition:opacity .15s ease-in-out .30s, transform .15s ease-in-out .30s
+}
+[data-tooltip]:hover::after,[data-tooltip]:focus-visible::after{
+  opacity:1;transform:translateX(-50%) translateY(0);transition-delay:.30s
+}
+[data-tooltip]::before{
+  content:"";position:absolute;bottom:calc(100% + 4px);left:50%;
+  transform:translateX(-50%);
+  border:6px solid transparent;border-top-color:rgba(17,24,39,.95);
+  opacity:0;transition:opacity .15s ease-in-out .30s;pointer-events:none;z-index:60
+}
+[data-tooltip]:hover::before,[data-tooltip]:focus-visible::before{opacity:1}
+
+/* ==== Skeletons ========================================================= */
+.skeleton{position:relative;background:#fff}
+.shimmer{
+  height:100%;width:100%;
+  background:linear-gradient(90deg,#f6f7f9 0%,#eef1f6 50%,#f6f7f9 100%);
+  background-size:200% 100%;
+  animation:shimmerMove 1.2s ease-in-out infinite;
+  opacity:.9
+}
+@keyframes shimmerMove{0%{background-position-x:0%}100%{background-position-x:-200%}}
+
+/* ==== Banner de red (pill) ============================================== */
+.net-pill{
+  display:inline-flex;gap:8px;align-items:center;
+  padding:6px 10px;border-radius:999px;
+  font-size:12px;font-weight:600;
+  box-shadow:0 8px 24px rgba(0,0,0,.06);
+  border:1px solid rgba(0,0,0,.06);
+  backdrop-filter:saturate(180%) blur(8px);
+}
+.net-pill.off{background:#fff1f2;color:#e11d48;border-color:#fecdd3}
+.net-pill.on{background:#ecfdf5;color:#047857;border-color:#a7f3d0}
+
+/* Posición fija abajo-derecha (lado destinatarios) */
+.net-fab{
+  position:fixed;z-index:60;right:16px;bottom:16px;
+}
+@media (max-width:768px){
+  .net-fab{right:12px;bottom:calc(76px + var(--safe-bottom))}
+}
+
+/* ==== DOT de color consistente (móvil/escritorio) ======================= */
+.nenena-dot{
+  width:14px !important;
+  height:14px !important;
+  display:inline-block !important;
+  border-radius:9999px !important;
+  border:1px solid rgba(0,0,0,.12) !important;
+  flex:0 0 auto !important;
+  box-sizing:border-box !important;
+}

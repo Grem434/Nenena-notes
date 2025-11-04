@@ -1,0 +1,9 @@
+version: "3.9"
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-test
+    ports:
+      - "8080:80"
+    volumes:
+      - C:/Users/davro/proyectos/nenena-notes-mvp-skeleton/apps/web/dist:/usr/share/nginx/html:ro

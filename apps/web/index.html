@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Nenena Notes</title>
+
+    <!-- PWA / Icons -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#f2718e" />
+
+    <!-- Favicon & Apple icons -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon192.png" />
+    <link rel="apple-touch-icon" href="/icons/icon192.png" />
+
+    <!-- iOS PWA tweaks (opcionales pero recomendables) -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <!-- Añadido para resolver el aviso deprecado -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Nenena Notes" />
+
+    <!-- SEO básico -->
+    <meta name="description" content="Nenena Notes — notas internas del equipo Nenena." />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
