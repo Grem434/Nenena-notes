@@ -1,13 +1,17 @@
 [build]
+  # Con base dir = apps/web (en la UI de Netlify), estos paths son relativos a esa carpeta
   command = "npm ci && npm run build"
   publish = "dist"
 
+# SPA: que todas las rutas carguen index.html
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
 
-# HTML sin caché fuerte
+# --- Cacheo controlado para evitar versiones “pegadas” ---
+
+# HTML sin cache fuerte (así siempre se trae la versión nueva)
 [[headers]]
   for = "/index.html"
   [headers.values]
@@ -20,8 +24,27 @@
   Cache-Control = "no-cache"
   Service-Worker-Allowed = "/"
 
-# Assets generados por Vite: cache fuerte
+# Manifest: puede cambiar entre builds
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+  Cache-Control = "no-cache"
+
+# Estáticos fingerprinted por Vite: cache fuerte
 [[headers]]
   for = "/assets/*"
   [headers.values]
   Cache-Control = "public, max-age=31536000, immutable"
+
+# Opcional: iconos/favicons (pocos cambios, se pueden cachear moderadamente)
+[[headers]]
+  for = "/icons/*"
+  [headers.values]
+  Cache-Control = "public, max-age=604800" # 7 días
+
+# Seguridad básica
+[[headers]]
+  for = "/*"
+  [headers.values]
+  X-Content-Type-Options = "nosniff"
+  Referrer-Policy = "strict-origin-when-cross-origin"
