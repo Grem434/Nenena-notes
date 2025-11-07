@@ -1,70 +1,131 @@
-import { useEffect } from "react";
+import React, { useMemo } from "react";
+import { useNotesStore } from "@/store/useNotesStore";
 import { useUsersStore } from "@/store/useUsersStore";
+import { Mail, User2 } from "lucide-react";
 
-/* HSV → HEX (con fallback) */
-const clamp = (n, a, b) => Math.max(a, Math.min(b, Number(n ?? 0)));
-const norm = (c) => ({
-  h: ((Number(c?.h) || 0) % 360 + 360) % 360,
-  s: clamp(c?.s, 0, 100),
-  v: clamp(c?.v, 0, 100),
-});
-const hsvToRgb = ({ h, s, v }) => {
-  const S = s / 100, V = v / 100;
-  const C = V * S, X = C * (1 - Math.abs(((h / 60) % 2) - 1)), m = V - C;
-  let r=0,g=0,b=0;
-  if (h < 60) [r,g,b] = [C,X,0];
-  else if (h < 120) [r,g,b] = [X,C,0];
-  else if (h < 180) [r,g,b] = [0,C,X];
-  else if (h < 240) [r,g,b] = [0,X,C];
-  else if (h < 300) [r,g,b] = [X,0,C];
-  else [r,g,b] = [C,0,X];
-  return { r: Math.round((r+m)*255), g: Math.round((g+m)*255), b: Math.round((b+m)*255) };
-};
-const rgbToHex = ({ r, g, b }) =>
-  `#${r.toString(16).padStart(2,"0")}${g.toString(16).padStart(2,"0")}${b.toString(16).padStart(2,"0")}`;
-const safeHex = (c) => {
-  try {
-    const n = norm(c ?? { h: 210, s: 10, v: 83 });
-    return rgbToHex(hsvToRgb(n));
-  } catch {
-    return "#D1D5DB";
+function getCounts(notes, username) {
+  let inbound = 0;
+  let personal = 0;
+
+  for (const n of notes) {
+    if (!n) continue;
+    if (n.archived) continue;
+    if (n.deleted) continue;
+    if (n.to !== username) continue;
+
+    const isPersonal = n.from === username;
+    if (isPersonal) {
+      personal++;
+    } else {
+      inbound++;
+    }
   }
-};
 
-export default function RecipientsSidebarMobile({ open, onClose, onPickRecipient }) {
-  const { users, ensureDefaults, pullRemote } = useUsersStore();
+  return {
+    inbound,
+    personal,
+    total: inbound + personal,
+  };
+}
 
-  useEffect(() => { ensureDefaults(); }, [ensureDefaults]);
-  useEffect(() => { if (open) pullRemote?.(); }, [open, pullRemote]);
+export default function RecipientsSidebar({
+  selectedRecipient,
+  setSelectedRecipient,
+}) {
+  const notes = useNotesStore((s) => s.notes || []);
+  const users = useUsersStore((s) => s.users || []);
+
+  // Precomputamos contadores por nombre para no recalcular en cada render
+  const countsByUser = useMemo(() => {
+    const map = {};
+    for (const u of users) {
+      map[u.name] = getCounts(notes, u.name);
+    }
+    return map;
+  }, [notes, users]);
 
   return (
-    <div className={`fixed inset-0 z-40 md:hidden transition ${open ? "pointer-events-auto" : "pointer-events-none"}`}>
-      <div className={`absolute inset-0 bg-black/30 ${open ? "opacity-100" : "opacity-0"}`} onClick={onClose} />
-      <aside
-        className={`absolute right-0 top-0 h-full w-[84%] max-w-[360px] bg-white shadow-2xl border-l border-slate-200
-        transition-transform ${open ? "translate-x-0" : "translate-x-full"}`}
-      >
-        <div className="p-4 space-y-3 overflow-y-auto h-full">
-          <h2 className="text-base font-semibold text-gray-700">Destinatarios</h2>
-          <ul className="space-y-1">
-            {users.map((u) => (
-              <li key={u.name}>
-                <button
-                  className="w-full text-left flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-gray-50"
-                  onClick={() => { onPickRecipient?.(u.name); onClose?.(); }}
-                >
-                  <span
-                    className="nenena-dot"
-                    style={{ backgroundColor: safeHex(u?.color) }}
-                    aria-hidden
-                  />
-                  <span className="text-gray-800">{u.name}</span>
-                </button>
-              </li>
-            ))}
+    <aside className="hidden lg:flex lg:flex-col w-64 border-l border-slate-100 bg-white/60 backdrop-blur-sm">
+      <div className="px-4 py-3 border-b border-slate-100">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Destinatarios
+        </h2>
+      </div>
+      <div className="flex-1 overflow-y-auto py-2">
+        {users.length === 0 ? (
+          <p className="text-xs text-slate-400 px-4 py-2">
+            No hay usuarios todavía.
+          </p>
+        ) : (
+          <ul className="space-y-1 px-2">
+            {users.map((user) => {
+              const counts = countsByUser[user.name] || {
+                inbound: 0,
+                personal: 0,
+                total: 0,
+              };
+              const isActive = selectedRecipient === user.name;
+              return (
+                <li key={user.name}>
+                  <button
+                    onClick={() =>
+                      setSelectedRecipient(
+                        isActive ? null : user.name // permite deseleccionar
+                      )
+                    }
+                    className={[
+                      "w-full flex items-center gap-2 px-2.5 py-2 rounded-xl transition-colors",
+                      isActive
+                        ? "bg-pink-50 border border-pink-100"
+                        : "hover:bg-slate-50",
+                    ].join(" ")}
+                  >
+                    {/* puntito de color del user */}
+                    <span
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: user.color || "#f472b6" }}
+                      aria-hidden
+                    />
+                    <span className="flex-1 text-sm text-slate-700 truncate">
+                      {user.name}
+                    </span>
+
+                    {/* contadores */}
+                    <span className="flex items-center gap-1">
+                      <span
+                        className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 text-[10px] text-slate-600 px-1.5 py-0.5"
+                        title="Notas de otros para este destinatario"
+                      >
+                        <Mail className="w-3 h-3" />
+                        {counts.inbound}
+                      </span>
+                      <span
+                        className="inline-flex items-center gap-0.5 rounded-full bg-violet-50 text-[10px] text-violet-700 px-1.5 py-0.5"
+                        title="Notas personales de este usuario"
+                      >
+                        <User2 className="w-3 h-3" />
+                        {counts.personal}
+                      </span>
+                    </span>
+
+                    {/* total visible solo si está seleccionado */}
+                    {isActive && counts.total > 0 ? (
+                      <span className="ml-1 inline-flex items-center rounded-full bg-pink-500/10 text-pink-500 text-[10px] px-2 py-0.5">
+                        {counts.total}
+                      </span>
+                    ) : null}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
-        </div>
-      </aside>
-    </div>
+        )}
+      </div>
+      <div className="px-4 py-2 border-t border-slate-100">
+        <p className="text-[10px] text-slate-400 leading-tight">
+          📨 = notas que le han mandado otros · 👤 = notas personales
+        </p>
+      </div>
+    </aside>
   );
 }
