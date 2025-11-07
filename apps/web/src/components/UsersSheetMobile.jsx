@@ -1,5 +1,10 @@
 import React, { useMemo } from "react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogHeader,
+  DialogTitle,
+  DialogContent,
+} from "@/components/ui/dialog";
 import { useUsersStore } from "@/store/useUsersStore";
 import { useNotesStore } from "@/store/useNotesStore";
 import { Mail, User2 } from "lucide-react";
@@ -7,33 +12,17 @@ import { Mail, User2 } from "lucide-react";
 function getCounts(notes, username) {
   let inbound = 0;
   let personal = 0;
-
   for (const n of notes) {
     if (!n) continue;
-    if (n.archived) continue;
-    if (n.deleted) continue;
+    if (n.archived || n.deleted) continue;
     if (n.to !== username) continue;
-
-    const isPersonal = n.from === username;
-    if (isPersonal) {
-      personal++;
-    } else {
-      inbound++;
-    }
+    if (n.from === username) personal++;
+    else inbound++;
   }
-
-  return {
-    inbound,
-    personal,
-    total: inbound + personal,
-  };
+  return { inbound, personal, total: inbound + personal };
 }
 
-export default function UsersSheetMobile({
-  open,
-  onOpenChange,
-  onSelect,
-}) {
+export default function UsersSheetMobile({ open, onOpenChange, onSelect }) {
   const users = useUsersStore((s) => s.users || []);
   const notes = useNotesStore((s) => s.notes || []);
 
@@ -45,21 +34,24 @@ export default function UsersSheetMobile({
     return map;
   }, [users, notes]);
 
+  if (!open) return null;
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="max-h-[70vh] rounded-t-3xl p-4">
-        <SheetHeader>
-          <SheetTitle className="text-sm text-slate-700">
-            Destinatarios
-          </SheetTitle>
-        </SheetHeader>
-        <div className="mt-4 space-y-2 overflow-y-auto max-h-[50vh] pb-6">
-          {users.length === 0 ? (
-            <p className="text-xs text-slate-400">
-              No hay usuarios todavía.
-            </p>
-          ) : (
-            users.map((user) => {
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogHeader>
+        <DialogTitle className="text-sm text-slate-700 px-4 py-2">
+          Destinatarios
+        </DialogTitle>
+      </DialogHeader>
+
+      <DialogContent className="max-h-[70vh] overflow-y-auto rounded-b-2xl p-4">
+        {users.length === 0 ? (
+          <p className="text-xs text-slate-400 px-2 py-4">
+            No hay usuarios todavía.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {users.map((user) => {
               const counts = countsByUser[user.name] || {
                 inbound: 0,
                 personal: 0,
@@ -67,13 +59,13 @@ export default function UsersSheetMobile({
               };
               return (
                 <button
-                    key={user.name}
-                    onClick={() => {
-                      onSelect?.(user.name);
-                      onOpenChange?.(false);
-                    }}
-                    className="w-full flex items-center gap-3 bg-slate-50/40 hover:bg-slate-100/80 transition-colors rounded-2xl px-3 py-2.5"
-                  >
+                  key={user.name}
+                  onClick={() => {
+                    onSelect?.(user.name);
+                    onOpenChange?.(false);
+                  }}
+                  className="w-full flex items-center gap-3 bg-slate-50/40 hover:bg-slate-100/80 transition-colors rounded-2xl px-3 py-2.5"
+                >
                   <span
                     className="w-8 h-8 rounded-full shrink-0"
                     style={{ backgroundColor: user.color || "#f472b6" }}
@@ -105,13 +97,12 @@ export default function UsersSheetMobile({
                       ) : null}
                     </div>
                   </div>
-                  {/* 👇 ya NO hay papelera en móvil */}
                 </button>
               );
-            })
-          )}
-        </div>
-      </SheetContent>
-    </Sheet>
+            })}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
