@@ -23,67 +23,43 @@ import ShortcutsHelp from "@/components/ShortcutsHelp";
 
 const NoteFocusLazy = lazy(() => import("@/components/NoteFocus"));
 
+// 🔖 id de build para invalidar caché de forma segura
 const BUILD_ID = import.meta.env.VITE_BUILD_ID || "dev";
 
-useEffect(() => {
-  (async () => {
-    try {
-      const prev = localStorage.getItem("nenena-build-id");
-
-      if (prev !== BUILD_ID) {
-        // 1) Desregistrar cualquier Service Worker previo
-        try {
-          const regs = await navigator.serviceWorker?.getRegistrations?.();
-          if (Array.isArray(regs)) {
-            await Promise.all(regs.map((r) => r.unregister()));
-          }
-        } catch {}
-
-        // 2) Limpiar TODO el storage del sitio (para evitar claves “huérfanas”)
-        try {
-          localStorage.clear();
-        } catch {}
-        try {
-          // IndexedDB
-          if (indexedDB?.databases) {
-            const dbs = await indexedDB.databases();
-            await Promise.all(
-              dbs
-                .filter((d) => d?.name)
-                .map((d) => indexedDB.deleteDatabase(d.name))
-            );
-          }
-        } catch {}
-        try {
-          // Cache Storage
-          const keys = await caches?.keys?.();
-          if (Array.isArray(keys)) {
-            await Promise.all(keys.map((k) => caches.delete(k)));
-          }
-        } catch {}
-
-        // 3) Guardar BUILD_ID para no repetir el reset
-        localStorage.setItem("nenena-build-id", BUILD_ID);
-
-        // 4) Pull remoto para repoblar todo
-        try { useUsersStore.getState().pullRemote?.(); } catch {}
-        try {
-          const { data, error } = await import("@/lib/sync").then((m) => m.pullAllNotes());
-          if (!error && Array.isArray(data)) {
-            useNotesStore.getState().applyRemoteNotes(data);
-          }
-        } catch {}
-
-        // 5) (opcional) forzar una recarga limpia tras el reset total
-        setTimeout(() => window.location.reload(), 50);
+// Limpieza SUAVE: solo nuestras claves; features opcionales con try/catch
+async function clearNenenaLocalDataSoft() {
+  try {
+    Object.keys(localStorage).forEach((k) => {
+      if (k.startsWith("nenena-") || k.startsWith("nenena_")) {
+        localStorage.removeItem(k);
       }
-    } catch {}
-  })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, []);
+    });
+  } catch {}
+  // IndexedDB: elimina DBs que empiecen por nenena-
+  try {
+    if (indexedDB?.databases) {
+      const dbs = await indexedDB.databases();
+      await Promise.all(
+        dbs
+          .filter((d) => d?.name && d.name.startsWith("nenena-"))
+          .map((d) => indexedDB.deleteDatabase(d.name))
+      );
+    }
+  } catch {}
+  // Cache Storage: borra caches con nuestro prefijo (si los tuvieras nombrados)
+  try {
+    const keys = await caches?.keys?.();
+    if (Array.isArray(keys)) {
+      await Promise.all(
+        keys
+          .filter((k) => k.startsWith("nenena-"))
+          .map((k) => caches.delete(k))
+      );
+    }
+  } catch {}
+}
 
-
-/** Pequeño helper de debounce para el buscador */
+// Debounce
 function useDebouncedValue(value, delay = 250) {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -133,18 +109,17 @@ export default function App() {
   const setFocusedNote = useUIStore((s) => s.setFocusedNote);
   const cardTone = useStyleStore((s) => s.cardTone);
 
-  // ✅ Auto-invalida caché local cuando cambia el build (Netlify VITE_BUILD_ID).
+  // ✅ Invalida caché local cuando cambia el build (sin romper el arranque)
   useEffect(() => {
     (async () => {
       try {
         const prev = localStorage.getItem("nenena-build-id");
         if (prev !== BUILD_ID) {
-          await clearNenenaLocalData();
+          await clearNenenaLocalDataSoft();
           localStorage.setItem("nenena-build-id", BUILD_ID);
-          // Pull inicial tras limpiar
-          try {
-            useUsersStore.getState().pullRemote?.();
-          } catch {}
+
+          // Pull inicial tras limpiar (sin recargar la página)
+          try { useUsersStore.getState().pullRemote?.(); } catch {}
           try {
             const { data, error } = await pullAllNotes();
             if (!error && Array.isArray(data)) {
@@ -154,16 +129,13 @@ export default function App() {
         }
       } catch {}
     })();
-    // no deps: queremos que se ejecute una vez por carga
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 🔁 Auto-pull suave cada 90s para mantener Edge/Chrome en sintonía
+  // 🔁 Auto-pull cada 90s (mantener Edge/Chrome alineados)
   useEffect(() => {
     const id = setInterval(() => {
-      try {
-        useUsersStore.getState().pullRemote?.();
-      } catch {}
+      try { useUsersStore.getState().pullRemote?.(); } catch {}
       try {
         pullAllNotes().then((r) => {
           if (Array.isArray(r?.data)) applyRemoteNotes(r.data);
@@ -225,26 +197,19 @@ export default function App() {
       });
     })();
     return () => {
-      try {
-        stop && stop();
-      } catch {}
+      try { stop && stop(); } catch {}
       stopNotesSync();
     };
   }, [authenticated, applyRemoteNote, applyRemoteNotes]);
 
-  /* 🔄 Pull de colores en eventos de foco/online */
+  // 🔄 Pull de colores en foco/visible/online
   useEffect(() => {
     const pull = () => {
-      try {
-        useUsersStore.getState().pullRemote?.();
-      } catch (e) {
-        console.warn("[users] pullRemote@App error", e);
-      }
+      try { useUsersStore.getState().pullRemote?.(); } catch (e) { console.warn("[users] pullRemote@App error", e); }
     };
     pull();
     const onFocus = () => pull();
-    const onVisible = () =>
-      document.visibilityState === "visible" ? pull() : null;
+    const onVisible = () => (document.visibilityState === "visible" ? pull() : null);
     const onOnline = () => pull();
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisible);
@@ -264,60 +229,25 @@ export default function App() {
       if (!el) return false;
       const tag = el.tagName?.toLowerCase();
       const ed = el.getAttribute?.("contenteditable");
-      return (
-        tag === "input" ||
-        tag === "textarea" ||
-        ed === "" ||
-        ed === "true"
-      );
+      return tag === "input" || tag === "textarea" || ed === "" || ed === "true";
     };
     const onKey = (e) => {
       const key = e.key.toLowerCase();
       if (isEditable(e.target) || e.ctrlKey || e.altKey || e.metaKey) return;
 
-      if (key === "n") {
+      if (key === "n") { e.preventDefault(); setOpen(true); return; }
+      if (key === "f") { e.preventDefault(); window.dispatchEvent(new Event("nenena:focus-search")); return; }
+      if (["1","2","3","4","5"].includes(key)) {
         e.preventDefault();
-        setOpen(true);
-        return;
-      }
-      if (key === "f") {
-        e.preventDefault();
-        window.dispatchEvent(new Event("nenena:focus-search"));
-        return;
-      }
-      if (["1", "2", "3", "4", "5"].includes(key)) {
-        e.preventDefault();
-        const map = {
-          "1": "todas",
-          "2": "pendiente",
-          "3": "resuelta",
-          "4": "archivadas",
-          "5": "papelera",
-        };
-        setFilter(map[key]);
-        setSelectedPersonal(null);
-        setSelectedRecipient(null);
-        return;
+        const map={"1":"todas","2":"pendiente","3":"resuelta","4":"archivadas","5":"papelera"};
+        setFilter(map[key]); setSelectedPersonal(null); setSelectedRecipient(null); return;
       }
       if (key === "escape") {
-        if (helpOpen) {
-          e.preventDefault();
-          setHelpOpen(false);
-          return;
-        }
-        if (open) {
-          e.preventDefault();
-          setOpen(false);
-          return;
-        }
-        setFocusedNote(null);
-        return;
+        if (helpOpen) { e.preventDefault(); setHelpOpen(false); return; }
+        if (open) { e.preventDefault(); setOpen(false); return; }
+        setFocusedNote(null); return;
       }
-      if (key === "?" || (e.shiftKey && key === "/")) {
-        e.preventDefault();
-        setHelpOpen(true);
-        return;
-      }
+      if (key === "?" || (e.shiftKey && key === "/")) { e.preventDefault(); setHelpOpen(true); return; }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -328,107 +258,45 @@ export default function App() {
     if (!Array.isArray(notes)) return [];
     let list = [];
     if (selectedRecipient) {
-      list = notes.filter(
-        (n) =>
-          n.to === selectedRecipient &&
-          !n.deleted &&
-          !n.archived &&
-          !isPersonal(n)
-      );
+      list = notes.filter((n) => n.to === selectedRecipient && !n.deleted && !n.archived && !isPersonal(n));
     } else {
       switch (filter) {
-        case "todas":
-          list = notes.filter(
-            (n) => !n.archived && !n.deleted && !isPersonal(n)
-          );
-          break;
-        case "pendiente":
-          list = notes.filter(
-            (n) =>
-              n.status === "pendiente" &&
-              !n.archived &&
-              !n.deleted &&
-              !isPersonal(n)
-          );
-          break;
-        case "resuelta":
-          list = notes.filter(
-            (n) =>
-              n.status === "resuelta" &&
-              !n.archived &&
-              !n.deleted &&
-              !isPersonal(n)
-          );
-          break;
-        case "archivadas":
-          list = notes.filter(
-            (n) => n.archived && !n.deleted && !isPersonal(n)
-          );
-          break;
+        case "todas": list = notes.filter((n) => !n.archived && !n.deleted && !isPersonal(n)); break;
+        case "pendiente": list = notes.filter((n) => n.status === "pendiente" && !n.archived && !n.deleted && !isPersonal(n)); break;
+        case "resuelta": list = notes.filter((n) => n.status === "resuelta" && !n.archived && !n.deleted && !isPersonal(n)); break;
+        case "archivadas": list = notes.filter((n) => n.archived && !n.deleted && !isPersonal(n)); break;
         case "personales":
-          if (selectedPersonal)
-            list = notes.filter(
-              (n) =>
-                n.from === selectedPersonal &&
-                n.to === selectedPersonal &&
-                !n.archived &&
-                !n.deleted
-            );
+          if (selectedPersonal) list = notes.filter((n) => n.from === selectedPersonal && n.to === selectedPersonal && !n.archived && !n.deleted);
           break;
-        case "papelera":
-          list = notes.filter((n) => n.deleted && !isPersonal(n));
-          break;
-        default:
-          list = notes.filter(
-            (n) => !n.archived && !n.deleted && !isPersonal(n)
-          );
+        case "papelera": list = notes.filter((n) => n.deleted && !isPersonal(n)); break;
+        default: list = notes.filter((n) => !n.archived && !n.deleted && !isPersonal(n));
       }
     }
     if (debouncedSearch.trim()) {
       const term = debouncedSearch.toLowerCase();
-      list = list.filter(
-        (n) =>
-          n.text?.toLowerCase().includes(term) ||
-          n.from?.toLowerCase().includes(term) ||
-          n.to?.toLowerCase().includes(term)
+      list = list.filter((n) =>
+        n.text?.toLowerCase().includes(term) ||
+        n.from?.toLowerCase().includes(term) ||
+        n.to?.toLowerCase().includes(term)
       );
     }
     return list;
-  }, [
-    authenticated,
-    ready,
-    notes,
-    filter,
-    selectedPersonal,
-    selectedRecipient,
-    debouncedSearch,
-  ]);
+  }, [authenticated, ready, notes, filter, selectedPersonal, selectedRecipient, debouncedSearch]);
 
   const viewLabel = useMemo(() => {
     if (selectedRecipient) return `📨 Notas para ${selectedRecipient}`;
     switch (filter) {
-      case "todas":
-        return "📬 Todas las notas";
-      case "pendiente":
-        return "⏳ Pendientes";
-      case "resuelta":
-        return "✅ Resueltas";
-      case "archivadas":
-        return "📦 Archivadas";
-      case "personales":
-        return selectedPersonal
-          ? `👤 Personales de ${selectedPersonal}`
-          : "👤 Personales";
-      case "papelera":
-        return "🗑️ Papelera";
-      default:
-        return "📬 Todas las notas";
+      case "todas": return "📬 Todas las notas";
+      case "pendiente": return "⏳ Pendientes";
+      case "resuelta": return "✅ Resueltas";
+      case "archivadas": return "📦 Archivadas";
+      case "personales": return selectedPersonal ? `👤 Personales de ${selectedPersonal}` : "👤 Personales";
+      case "papelera": return "🗑️ Papelera";
+      default: return "📬 Todas las notas";
     }
   }, [filter, selectedRecipient, selectedPersonal]);
 
-  const virtualResetKey = `${filter}|${selectedRecipient ?? ""}|${
-    selectedPersonal ?? ""
-  }|${debouncedSearch}`;
+  const virtualResetKey = `${filter}|${selectedRecipient ?? ""}|${selectedPersonal ?? ""}|${debouncedSearch}`;
 
   if (!authenticated) return <Login onSuccess={handleLoginSuccess} />;
 
@@ -443,8 +311,7 @@ export default function App() {
     );
   }
 
-  // 👇 Ajuste de columnas para cuadrícula igual en Chrome/Edge
-  // Cambia el 240 si quieres más/menos tamaño de tarjeta.
+  // Cuadrícula (ajusta 240 si quieres otro tamaño)
   const gridStyle = !isCompactView
     ? { gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }
     : undefined;
@@ -478,12 +345,7 @@ export default function App() {
             </div>
           </div>
 
-          <main
-            className={cn(
-              "flex-1 overflow-y-auto contain-strict",
-              "pb-[calc(64px+env(safe-area-inset-bottom,0px))] md:pb-6"
-            )}
-          >
+          <main className={cn("flex-1 overflow-y-auto contain-strict","pb-[calc(64px+env(safe-area-inset-bottom,0px))] md:pb-6")}>
             <div
               className={cn(
                 "max-w-7xl mx-auto w-full px-3 sm:px-4",
@@ -499,11 +361,7 @@ export default function App() {
               style={gridStyle}
             >
               {isFiltering ? (
-                isCompactView ? (
-                  <NoteSkeletons variant="list" count={6} />
-                ) : (
-                  <NoteSkeletons variant="grid" count={8} />
-                )
+                isCompactView ? <NoteSkeletons variant="list" count={6} /> : <NoteSkeletons variant="grid" count={8} />
               ) : isCompactView ? (
                 <VirtualList
                   items={filtered}
@@ -523,23 +381,20 @@ export default function App() {
                 <div className="col-span-full text-center text-slate-400 mt-16">
                   <p className="text-base mb-1">✨ No hay notas para mostrar</p>
                   <p className="text-sm">
-                    Usa los filtros del lateral o pulsa{" "}
-                    <span className="text-pink-500 font-medium">➕ Nueva nota</span>.
+                    Usa los filtros del lateral o pulsa <span className="text-pink-500 font-medium">➕ Nueva nota</span>.
                   </p>
                 </div>
               )}
             </div>
           </main>
 
-          <Suspense
-            fallback={
-              <div className="fixed inset-0 pointer-events-none flex items-center justify-center">
-                <div className="animate-pulse text-pink-500 text-sm bg.white/70 backdrop-blur rounded-full px-3 py-1 border border-pink-200">
-                  Cargando detalle…
-                </div>
+          <Suspense fallback={
+            <div className="fixed inset-0 pointer-events-none flex items-center justify-center">
+              <div className="animate-pulse text-pink-500 text-sm bg.white/70 backdrop-blur rounded-full px-3 py-1 border border-pink-200">
+                Cargando detalle…
               </div>
-            }
-          >
+            </div>
+          }>
             <NoteFocusLazy />
           </Suspense>
 
