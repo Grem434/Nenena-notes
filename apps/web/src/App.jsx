@@ -23,95 +23,228 @@ import ShortcutsHelp from "@/components/ShortcutsHelp";
 
 const NoteFocusLazy = lazy(() => import("@/components/NoteFocus"));
 
-function useDebouncedValue(value, delay = 250){
-  const [debounced,setDebounced]=useState(value);
-  useEffect(()=>{const t=setTimeout(()=>setDebounced(value),delay);return()=>clearTimeout(t)},[value,delay]);
+const BUILD_ID = import.meta.env.VITE_BUILD_ID || "dev";
+
+useEffect(() => {
+  (async () => {
+    try {
+      const prev = localStorage.getItem("nenena-build-id");
+
+      if (prev !== BUILD_ID) {
+        // 1) Desregistrar cualquier Service Worker previo
+        try {
+          const regs = await navigator.serviceWorker?.getRegistrations?.();
+          if (Array.isArray(regs)) {
+            await Promise.all(regs.map((r) => r.unregister()));
+          }
+        } catch {}
+
+        // 2) Limpiar TODO el storage del sitio (para evitar claves “huérfanas”)
+        try {
+          localStorage.clear();
+        } catch {}
+        try {
+          // IndexedDB
+          if (indexedDB?.databases) {
+            const dbs = await indexedDB.databases();
+            await Promise.all(
+              dbs
+                .filter((d) => d?.name)
+                .map((d) => indexedDB.deleteDatabase(d.name))
+            );
+          }
+        } catch {}
+        try {
+          // Cache Storage
+          const keys = await caches?.keys?.();
+          if (Array.isArray(keys)) {
+            await Promise.all(keys.map((k) => caches.delete(k)));
+          }
+        } catch {}
+
+        // 3) Guardar BUILD_ID para no repetir el reset
+        localStorage.setItem("nenena-build-id", BUILD_ID);
+
+        // 4) Pull remoto para repoblar todo
+        try { useUsersStore.getState().pullRemote?.(); } catch {}
+        try {
+          const { data, error } = await import("@/lib/sync").then((m) => m.pullAllNotes());
+          if (!error && Array.isArray(data)) {
+            useNotesStore.getState().applyRemoteNotes(data);
+          }
+        } catch {}
+
+        // 5) (opcional) forzar una recarga limpia tras el reset total
+        setTimeout(() => window.location.reload(), 50);
+      }
+    } catch {}
+  })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
+
+/** Pequeño helper de debounce para el buscador */
+function useDebouncedValue(value, delay = 250) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
   return debounced;
 }
 
-export default function App(){
-  const [authenticated,setAuthenticated]=useState(false);
-  const [ready,setReady]=useState(false);
+export default function App() {
+  const [authenticated, setAuthenticated] = useState(false);
+  const [ready, setReady] = useState(false);
 
-  const [open,setOpen]=useState(false);
-  const [helpOpen,setHelpOpen]=useState(false);
-  const [search,setSearchState]=useState("");
-  const debouncedSearch=useDebouncedValue(search,250);
-  const isFiltering=search!==debouncedSearch;
-  const [selectedPersonal,setSelectedPersonal]=useState(null);
-  const [selectedRecipient,setSelectedRecipient]=useState(null);
-  const [openUsers,setOpenUsers]=useState(false);
+  const [open, setOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [search, setSearchState] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 250);
+  const isFiltering = search !== debouncedSearch;
+  const [selectedPersonal, setSelectedPersonal] = useState(null);
+  const [selectedRecipient, setSelectedRecipient] = useState(null);
+  const [openUsers, setOpenUsers] = useState(false);
 
-  const [isOnline,setIsOnline]=useState(typeof navigator!=="undefined"?navigator.onLine:true);
-  useEffect(()=>{
-    const on=()=>setIsOnline(true);
-    const off=()=>setIsOnline(false);
-    window.addEventListener("online",on);
-    window.addEventListener("offline",off);
-    return()=>{window.removeEventListener("online",on);window.removeEventListener("offline",off);}
-  },[]);
+  const [isOnline, setIsOnline] = useState(
+    typeof navigator !== "undefined" ? navigator.onLine : true
+  );
+  useEffect(() => {
+    const on = () => setIsOnline(true);
+    const off = () => setIsOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
+  }, []);
 
-  const notes=useNotesStore(s=>s.notes??[]);
-  const addNote=useNotesStore(s=>s.addNote);
-  const filter=useNotesStore(s=>s.filter);
-  const setFilter=useNotesStore(s=>s.setFilter);
-  const applyRemoteNote=useNotesStore(s=>s.applyRemoteNote);
-  const applyRemoteNotes=useNotesStore(s=>s.applyRemoteNotes);
+  const notes = useNotesStore((s) => s.notes ?? []);
+  const addNote = useNotesStore((s) => s.addNote);
+  const filter = useNotesStore((s) => s.filter);
+  const setFilter = useNotesStore((s) => s.setFilter);
+  const applyRemoteNote = useNotesStore((s) => s.applyRemoteNote);
+  const applyRemoteNotes = useNotesStore((s) => s.applyRemoteNotes);
 
-  useUsersStore(s=>s.users??[]);
-  const isCompactView=useUIStore(s=>s.isCompactView);
-  const toggleCompact=useUIStore(s=>s.toggleCompact);
-  const setFocusedNote=useUIStore(s=>s.setFocusedNote);
-  const cardTone=useStyleStore(s=>s.cardTone);
+  useUsersStore((s) => s.users ?? []);
+  const isCompactView = useUIStore((s) => s.isCompactView);
+  const toggleCompact = useUIStore((s) => s.toggleCompact);
+  const setFocusedNote = useUIStore((s) => s.setFocusedNote);
+  const cardTone = useStyleStore((s) => s.cardTone);
 
-  useEffect(()=>{
-    try{
-      const auth=localStorage.getItem("nenena_auth")||localStorage.getItem("nenena-auth");
-      setAuthenticated(auth==="ok");
-    }catch{setAuthenticated(false);}
-  },[]);
-  const handleLoginSuccess=()=>{
-    try{localStorage.setItem("nenena_auth","ok");localStorage.setItem("nenena-auth","ok");}catch{}
+  // ✅ Auto-invalida caché local cuando cambia el build (Netlify VITE_BUILD_ID).
+  useEffect(() => {
+    (async () => {
+      try {
+        const prev = localStorage.getItem("nenena-build-id");
+        if (prev !== BUILD_ID) {
+          await clearNenenaLocalData();
+          localStorage.setItem("nenena-build-id", BUILD_ID);
+          // Pull inicial tras limpiar
+          try {
+            useUsersStore.getState().pullRemote?.();
+          } catch {}
+          try {
+            const { data, error } = await pullAllNotes();
+            if (!error && Array.isArray(data)) {
+              applyRemoteNotes(data);
+            }
+          } catch {}
+        }
+      } catch {}
+    })();
+    // no deps: queremos que se ejecute una vez por carga
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 🔁 Auto-pull suave cada 90s para mantener Edge/Chrome en sintonía
+  useEffect(() => {
+    const id = setInterval(() => {
+      try {
+        useUsersStore.getState().pullRemote?.();
+      } catch {}
+      try {
+        pullAllNotes().then((r) => {
+          if (Array.isArray(r?.data)) applyRemoteNotes(r.data);
+        });
+      } catch {}
+    }, 90_000);
+    return () => clearInterval(id);
+  }, [applyRemoteNotes]);
+
+  useEffect(() => {
+    try {
+      const auth =
+        localStorage.getItem("nenena_auth") ||
+        localStorage.getItem("nenena-auth");
+      setAuthenticated(auth === "ok");
+    } catch {
+      setAuthenticated(false);
+    }
+  }, []);
+  const handleLoginSuccess = () => {
+    try {
+      localStorage.setItem("nenena_auth", "ok");
+      localStorage.setItem("nenena-auth", "ok");
+    } catch {}
     setAuthenticated(true);
   };
-  const handleLogout=()=>{
-    try{
+  const handleLogout = () => {
+    try {
       localStorage.removeItem("nenena_auth");
       localStorage.removeItem("nenena-auth");
       localStorage.removeItem("nenena-auth-user");
-    }catch{}
+    } catch {}
     setAuthenticated(false);
   };
 
-  useEffect(()=>{
+  useEffect(() => {
     registerQuickNoteEndpoint(
       addNote,
-      ()=>notify({variant:"info",title:"Nota rápida",description:"Se añadió una nueva nota"}),
-      (msg)=>notify({variant:"info",title:msg})
+      () =>
+        notify({
+          variant: "info",
+          title: "Nota rápida",
+          description: "Se añadió una nueva nota",
+        }),
+      (msg) => notify({ variant: "info", title: msg })
     );
-    const t=setTimeout(()=>setReady(true),300);
-    return()=>clearTimeout(t);
-  },[addNote]);
+    const t = setTimeout(() => setReady(true), 300);
+    return () => clearTimeout(t);
+  }, [addNote]);
 
-  useEffect(()=>{
-    if(!authenticated)return;
-    let stop=null;
-    (async()=>{
-      const {data,error}=await pullAllNotes();
-      if(!error&&Array.isArray(data)) applyRemoteNotes(data);
-      stop=startNotesSync({onUpsert:(row,eventType)=>applyRemoteNote(row,eventType)});
+  useEffect(() => {
+    if (!authenticated) return;
+    let stop = null;
+    (async () => {
+      const { data, error } = await pullAllNotes();
+      if (!error && Array.isArray(data)) applyRemoteNotes(data);
+      stop = startNotesSync({
+        onUpsert: (row, eventType) => applyRemoteNote(row, eventType),
+      });
     })();
-    return()=>{try{stop&&stop();}catch{} stopNotesSync();}
-  },[authenticated,applyRemoteNote,applyRemoteNotes]);
+    return () => {
+      try {
+        stop && stop();
+      } catch {}
+      stopNotesSync();
+    };
+  }, [authenticated, applyRemoteNote, applyRemoteNotes]);
 
-  /* 🔄 Pull de colores */
+  /* 🔄 Pull de colores en eventos de foco/online */
   useEffect(() => {
     const pull = () => {
-      try { useUsersStore.getState().pullRemote?.(); } catch (e) { console.warn("[users] pullRemote@App error", e); }
+      try {
+        useUsersStore.getState().pullRemote?.();
+      } catch (e) {
+        console.warn("[users] pullRemote@App error", e);
+      }
     };
     pull();
     const onFocus = () => pull();
-    const onVisible = () => (document.visibilityState === "visible" ? pull() : null);
+    const onVisible = () =>
+      document.visibilityState === "visible" ? pull() : null;
     const onOnline = () => pull();
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisible);
@@ -123,102 +256,200 @@ export default function App(){
     };
   }, []);
 
-  const isPersonal=(n)=>n.from&&n.to&&n.from===n.to;
+  const isPersonal = (n) => n.from && n.to && n.from === n.to;
 
-  useEffect(()=>{
-    if(!authenticated)return;
-    const isEditable=(el)=>{
-      if(!el)return false;
-      const tag=el.tagName?.toLowerCase();const ed=el.getAttribute?.("contenteditable");
-      return tag==="input"||tag==="textarea"||ed===""||ed==="true";
+  useEffect(() => {
+    if (!authenticated) return;
+    const isEditable = (el) => {
+      if (!el) return false;
+      const tag = el.tagName?.toLowerCase();
+      const ed = el.getAttribute?.("contenteditable");
+      return (
+        tag === "input" ||
+        tag === "textarea" ||
+        ed === "" ||
+        ed === "true"
+      );
     };
-    const onKey=(e)=>{
-      const key=e.key.toLowerCase();
-      if(isEditable(e.target)||e.ctrlKey||e.altKey||e.metaKey)return;
+    const onKey = (e) => {
+      const key = e.key.toLowerCase();
+      if (isEditable(e.target) || e.ctrlKey || e.altKey || e.metaKey) return;
 
-      if(key==="n"){e.preventDefault();setOpen(true);return;}
-      if(key==="f"){e.preventDefault();window.dispatchEvent(new Event("nenena:focus-search"));return;}
-      if(["1","2","3","4","5"].includes(key)){
+      if (key === "n") {
         e.preventDefault();
-        const map={"1":"todas","2":"pendiente","3":"resuelta","4":"archivadas","5":"papelera"};
-        setFilter(map[key]);setSelectedPersonal(null);setSelectedRecipient(null);return;
+        setOpen(true);
+        return;
       }
-      if(key==="escape"){
-        if (helpOpen) { e.preventDefault(); setHelpOpen(false); return; }
-        if (open) { e.preventDefault(); setOpen(false); return; }
-        setFocusedNote(null); return;
+      if (key === "f") {
+        e.preventDefault();
+        window.dispatchEvent(new Event("nenena:focus-search"));
+        return;
       }
-      if(key==="?" || (e.shiftKey && key==="/")){
+      if (["1", "2", "3", "4", "5"].includes(key)) {
+        e.preventDefault();
+        const map = {
+          "1": "todas",
+          "2": "pendiente",
+          "3": "resuelta",
+          "4": "archivadas",
+          "5": "papelera",
+        };
+        setFilter(map[key]);
+        setSelectedPersonal(null);
+        setSelectedRecipient(null);
+        return;
+      }
+      if (key === "escape") {
+        if (helpOpen) {
+          e.preventDefault();
+          setHelpOpen(false);
+          return;
+        }
+        if (open) {
+          e.preventDefault();
+          setOpen(false);
+          return;
+        }
+        setFocusedNote(null);
+        return;
+      }
+      if (key === "?" || (e.shiftKey && key === "/")) {
         e.preventDefault();
         setHelpOpen(true);
         return;
       }
     };
-    window.addEventListener("keydown",onKey);
-    return()=>window.removeEventListener("keydown",onKey);
-  },[authenticated,open,helpOpen,setFilter,setFocusedNote]);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [authenticated, open, helpOpen, setFilter, setFocusedNote]);
 
-  const filtered=useMemo(()=>{
-    if(!authenticated||!ready)return[];
-    if(!Array.isArray(notes))return[];
-    let list=[];
-    if(selectedRecipient){
-      list=notes.filter(n=>n.to===selectedRecipient&&!n.deleted&&!n.archived&&!isPersonal(n));
-    }else{
-      switch(filter){
-        case "todas": list=notes.filter(n=>!n.archived&&!n.deleted&&!isPersonal(n)); break;
-        case "pendiente": list=notes.filter(n=>n.status==="pendiente"&&!n.archived&&!n.deleted&&!isPersonal(n)); break;
-        case "resuelta": list=notes.filter(n=>n.status==="resuelta"&&!n.archived&&!n.deleted&&!isPersonal(n)); break;
-        case "archivadas": list=notes.filter(n=>n.archived&&!n.deleted&&!isPersonal(n)); break;
-        case "personales":
-          if(selectedPersonal) list=notes.filter(n=>n.from===selectedPersonal&&n.to===selectedPersonal&&!n.archived&&!n.deleted);
+  const filtered = useMemo(() => {
+    if (!authenticated || !ready) return [];
+    if (!Array.isArray(notes)) return [];
+    let list = [];
+    if (selectedRecipient) {
+      list = notes.filter(
+        (n) =>
+          n.to === selectedRecipient &&
+          !n.deleted &&
+          !n.archived &&
+          !isPersonal(n)
+      );
+    } else {
+      switch (filter) {
+        case "todas":
+          list = notes.filter(
+            (n) => !n.archived && !n.deleted && !isPersonal(n)
+          );
           break;
-        case "papelera": list=notes.filter(n=>n.deleted&&!isPersonal(n)); break;
-        default: list=notes.filter(n=>!n.archived&&!n.deleted&&!isPersonal(n));
+        case "pendiente":
+          list = notes.filter(
+            (n) =>
+              n.status === "pendiente" &&
+              !n.archived &&
+              !n.deleted &&
+              !isPersonal(n)
+          );
+          break;
+        case "resuelta":
+          list = notes.filter(
+            (n) =>
+              n.status === "resuelta" &&
+              !n.archived &&
+              !n.deleted &&
+              !isPersonal(n)
+          );
+          break;
+        case "archivadas":
+          list = notes.filter(
+            (n) => n.archived && !n.deleted && !isPersonal(n)
+          );
+          break;
+        case "personales":
+          if (selectedPersonal)
+            list = notes.filter(
+              (n) =>
+                n.from === selectedPersonal &&
+                n.to === selectedPersonal &&
+                !n.archived &&
+                !n.deleted
+            );
+          break;
+        case "papelera":
+          list = notes.filter((n) => n.deleted && !isPersonal(n));
+          break;
+        default:
+          list = notes.filter(
+            (n) => !n.archived && !n.deleted && !isPersonal(n)
+          );
       }
     }
-    if(debouncedSearch.trim()){
-      const term=debouncedSearch.toLowerCase();
-      list=list.filter(n=>n.text?.toLowerCase().includes(term)||n.from?.toLowerCase().includes(term)||n.to?.toLowerCase().includes(term));
+    if (debouncedSearch.trim()) {
+      const term = debouncedSearch.toLowerCase();
+      list = list.filter(
+        (n) =>
+          n.text?.toLowerCase().includes(term) ||
+          n.from?.toLowerCase().includes(term) ||
+          n.to?.toLowerCase().includes(term)
+      );
     }
     return list;
-  },[authenticated,ready,notes,filter,selectedPersonal,selectedRecipient,debouncedSearch]);
+  }, [
+    authenticated,
+    ready,
+    notes,
+    filter,
+    selectedPersonal,
+    selectedRecipient,
+    debouncedSearch,
+  ]);
 
-  const viewLabel=useMemo(()=>{
-    if(selectedRecipient) return `📨 Notas para ${selectedRecipient}`;
-    switch(filter){
-      case "todas": return "📬 Todas las notas";
-      case "pendiente": return "⏳ Pendientes";
-      case "resuelta": return "✅ Resueltas";
-      case "archivadas": return "📦 Archivadas";
-      case "personales": return selectedPersonal?`👤 Personales de ${selectedPersonal}`:"👤 Personales";
-      case "papelera": return "🗑️ Papelera";
-      default: return "📬 Todas las notas";
+  const viewLabel = useMemo(() => {
+    if (selectedRecipient) return `📨 Notas para ${selectedRecipient}`;
+    switch (filter) {
+      case "todas":
+        return "📬 Todas las notas";
+      case "pendiente":
+        return "⏳ Pendientes";
+      case "resuelta":
+        return "✅ Resueltas";
+      case "archivadas":
+        return "📦 Archivadas";
+      case "personales":
+        return selectedPersonal
+          ? `👤 Personales de ${selectedPersonal}`
+          : "👤 Personales";
+      case "papelera":
+        return "🗑️ Papelera";
+      default:
+        return "📬 Todas las notas";
     }
-  },[filter,selectedRecipient,selectedPersonal]);
+  }, [filter, selectedRecipient, selectedPersonal]);
 
-  const virtualResetKey = `${filter}|${selectedRecipient ?? ""}|${selectedPersonal ?? ""}|${debouncedSearch}`;
+  const virtualResetKey = `${filter}|${selectedRecipient ?? ""}|${
+    selectedPersonal ?? ""
+  }|${debouncedSearch}`;
 
-  if(!authenticated) return <Login onSuccess={handleLoginSuccess}/>;
+  if (!authenticated) return <Login onSuccess={handleLoginSuccess} />;
 
-  if(!ready){
-    return(
+  if (!ready) {
+    return (
       <div className="h-screen flex flex-col">
         <div className="h-14 border-b"></div>
         <div className="flex-1 max-w-7xl w-full mx-auto px-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pt-4">
-          <NoteSkeletons variant="grid" count={8}/>
+          <NoteSkeletons variant="grid" count={8} />
         </div>
       </div>
     );
   }
 
   // 👇 Ajuste de columnas para cuadrícula igual en Chrome/Edge
-  // Cambia el 320 si quieres más/menos tamaño de tarjeta.
+  // Cambia el 240 si quieres más/menos tamaño de tarjeta.
   const gridStyle = !isCompactView
     ? { gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }
     : undefined;
 
-  return(
+  return (
     <SoundProvider>
       <div className="flex h-screen text-slate-800 bg-white overflow-hidden">
         <Sidebar
@@ -230,22 +461,29 @@ export default function App(){
 
         <div className="flex-1 flex flex-col min-w-0 border-x border-slate-100">
           <Navbar
-            onNew={()=>setOpen(true)}
+            onNew={() => setOpen(true)}
             search={search}
             setSearch={setSearchState}
             isCompactView={isCompactView}
             toggleCompact={toggleCompact}
-            onOpenUsers={()=>setOpenUsers(true)}
-            onOpenHelp={()=>setHelpOpen(true)}
+            onOpenUsers={() => setOpenUsers(true)}
+            onOpenHelp={() => setHelpOpen(true)}
           />
 
-        <div className="sticky top-[56px] z-10 bg-white/85 backdrop-blur-md border-b border-slate-100">
+          <div className="sticky top-[56px] z-10 bg-white/85 backdrop-blur-md border-b border-slate-100">
             <div className="max-w-7xl mx-auto w-full px-4 py-2">
-              <h2 className="text-sm font-medium text-slate-600 select-none">{viewLabel}</h2>
+              <h2 className="text-sm font-medium text-slate-600 select-none">
+                {viewLabel}
+              </h2>
             </div>
           </div>
 
-          <main className={cn("flex-1 overflow-y-auto contain-strict","pb-[calc(64px+env(safe-area-inset-bottom,0px))] md:pb-6")}>
+          <main
+            className={cn(
+              "flex-1 overflow-y-auto contain-strict",
+              "pb-[calc(64px+env(safe-area-inset-bottom,0px))] md:pb-6"
+            )}
+          >
             <div
               className={cn(
                 "max-w-7xl mx-auto w-full px-3 sm:px-4",
@@ -253,7 +491,6 @@ export default function App(){
                   ? "flex flex-col gap-2.5 sm:gap-3 pt-3"
                   : [
                       "grid pt-4",
-                      // columnas responsivas originales (no hacen daño si mantenemos style abajo)
                       "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5",
                       "gap-3 sm:gap-4 xl:gap-5",
                       "auto-rows-[minmax(180px,_auto)]",
@@ -262,7 +499,11 @@ export default function App(){
               style={gridStyle}
             >
               {isFiltering ? (
-                isCompactView ? <NoteSkeletons variant="list" count={6}/> : <NoteSkeletons variant="grid" count={8}/>
+                isCompactView ? (
+                  <NoteSkeletons variant="list" count={6} />
+                ) : (
+                  <NoteSkeletons variant="grid" count={8} />
+                )
               ) : isCompactView ? (
                 <VirtualList
                   items={filtered}
@@ -271,32 +512,35 @@ export default function App(){
                   step={40}
                   overscan={0}
                   renderItem={(n) => (
-                    <NoteCard key={n.id} note={n} variant="list" tone={cardTone}/>
+                    <NoteCard key={n.id} note={n} variant="list" tone={cardTone} />
                   )}
                 />
-              ) : filtered.length>0 ? (
-                filtered.map(n=>(
-                  <NoteCard key={n.id} note={n} variant="grid" tone={cardTone}/>
+              ) : filtered.length > 0 ? (
+                filtered.map((n) => (
+                  <NoteCard key={n.id} note={n} variant="grid" tone={cardTone} />
                 ))
               ) : (
                 <div className="col-span-full text-center text-slate-400 mt-16">
                   <p className="text-base mb-1">✨ No hay notas para mostrar</p>
                   <p className="text-sm">
-                    Usa los filtros del lateral o pulsa <span className="text-pink-500 font-medium">➕ Nueva nota</span>.
+                    Usa los filtros del lateral o pulsa{" "}
+                    <span className="text-pink-500 font-medium">➕ Nueva nota</span>.
                   </p>
                 </div>
               )}
             </div>
           </main>
 
-          <Suspense fallback={
-            <div className="fixed inset-0 pointer-events-none flex items-center justify-center">
-              <div className="animate-pulse text-pink-500 text-sm bg.white/70 backdrop-blur rounded-full px-3 py-1 border border-pink-200">
-                Cargando detalle…
+          <Suspense
+            fallback={
+              <div className="fixed inset-0 pointer-events-none flex items-center justify-center">
+                <div className="animate-pulse text-pink-500 text-sm bg.white/70 backdrop-blur rounded-full px-3 py-1 border border-pink-200">
+                  Cargando detalle…
+                </div>
               </div>
-            </div>
-          }>
-            <NoteFocusLazy/>
+            }
+          >
+            <NoteFocusLazy />
           </Suspense>
 
           <div className="net-fab">
@@ -314,16 +558,16 @@ export default function App(){
         <NoteModal
           open={open}
           onOpenChange={setOpen}
-          onSave={(data)=>addNote({...data,archived:false})}
+          onSave={(data) => addNote({ ...data, archived: false })}
         />
       </div>
 
-      <MobileDock/>
+      <MobileDock />
 
       <UsersSheetMobile
         open={openUsers}
         onOpenChange={setOpenUsers}
-        onSelect={(name)=>{
+        onSelect={(name) => {
           setSelectedRecipient(null);
           setSelectedPersonal(name);
           setFilter("personales");
@@ -332,7 +576,7 @@ export default function App(){
 
       <ShortcutsHelp open={helpOpen} onOpenChange={setHelpOpen} />
 
-      <ToasterNenena/>
+      <ToasterNenena />
     </SoundProvider>
   );
 }

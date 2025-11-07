@@ -48,3 +48,10 @@
   [headers.values]
   X-Content-Type-Options = "nosniff"
   Referrer-Policy = "strict-origin-when-cross-origin"
+
+  # Forzar limpieza de cachés y storage del sitio en cada nueva carga de index.html
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+  Clear-Site-Data = "\"cache\", \"storage\""
+
