@@ -4,8 +4,9 @@ import { useNotesStore } from "@/store/useNotesStore";
 
 export default function NoteFocus({ note, onClose }) {
   const deleteNote = useNotesStore((s) => s.deleteNote);
-  const toggleArchive = useNotesStore((s) => s.toggleArchive);
-  const toggleResolved = useNotesStore((s) => s.toggleResolved);
+  const toggleArchive = useNotesStore((s) => s.archiveNote);
+  const toggleUnarchive = useNotesStore((s) => s.unarchiveNote);
+  const toggleStatus = useNotesStore((s) => s.toggleStatus);
   const addReply = useNotesStore((s) => s.addReply);
 
   const [replyText, setReplyText] = useState("");
@@ -13,16 +14,18 @@ export default function NoteFocus({ note, onClose }) {
   if (!note) return null;
 
   const handleDelete = () => {
-    deleteNote(note.id); // 👈 papelera siempre
+    // 👇 papelera siempre
+    deleteNote(note.id);
     onClose?.();
   };
 
   const handleArchive = () => {
-    toggleArchive(note.id);
+    if (note.archived) toggleUnarchive(note.id);
+    else toggleArchive(note.id);
   };
 
   const handleResolved = () => {
-    toggleResolved(note.id);
+    toggleStatus(note.id);
   };
 
   const handleAddReply = (e) => {
@@ -30,7 +33,7 @@ export default function NoteFocus({ note, onClose }) {
     const text = replyText.trim();
     if (!text) return;
     addReply(note.id, {
-      from: note.from,
+      author: note.from,
       text,
     });
     setReplyText("");
@@ -53,7 +56,7 @@ export default function NoteFocus({ note, onClose }) {
             <button
               onClick={handleResolved}
               className={`p-2 rounded-full hover:bg-slate-100 ${
-                note.resolved ? "text-emerald-500" : "text-slate-500"
+                note.status === "resuelta" ? "text-emerald-500" : "text-slate-500"
               }`}
               title="Marcar resuelta"
             >
@@ -96,7 +99,7 @@ export default function NoteFocus({ note, onClose }) {
               <ul className="space-y-2">
                 {note.replies.map((r) => (
                   <li
-                    key={r.id || r.created_at}
+                    key={r.id || r.createdAt}
                     className="bg-slate-50 rounded-xl px-3 py-2 text-sm text-slate-700"
                   >
                     {r.text}
