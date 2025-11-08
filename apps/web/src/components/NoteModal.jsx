@@ -102,13 +102,15 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
 
   return (
     <div
-      className={`fixed inset-0 z-[100] ${isMobile ? "" : "flex items-center justify-center"} bg-black/30`}
+      className={`fixed inset-0 z-[100] ${
+        isMobile ? "" : "flex items-center justify-center"
+      } bg-black/30`}
       role="dialog"
       aria-modal="true"
       onKeyDown={(e) => e.key === "Escape" && handleClose()}
-      // 👇 solo cerramos si el click fue en el overlay, no en los hijos
+      // 👇 SOLO escritorio: cerrar al tocar fondo
       onClick={(e) => {
-        if (e.target === e.currentTarget) {
+        if (!isMobile && e.target === e.currentTarget) {
           handleClose();
         }
       }}
@@ -119,9 +121,12 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
         className={[
           "bg-white shadow-xl border border-slate-200",
           "flex flex-col",
-          isMobile ? "fixed inset-0 rounded-none" : "w-full max-w-lg rounded-2xl mx-4 my-6",
+          isMobile
+            ? "fixed inset-0 rounded-none"
+            : "w-full max-w-lg rounded-2xl mx-4 my-6",
         ].join(" ")}
       >
+        {/* header */}
         <div
           className={
             isMobile
@@ -145,8 +150,19 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
           </div>
         </div>
 
-        <div className={isMobile ? "flex-1 overflow-y-auto px-4 py-4" : "px-5 py-4"}>
-          <div className={isMobile ? "grid grid-cols-1 gap-3" : "grid grid-cols-2 gap-3"}>
+        {/* body */}
+        <div
+          className={
+            isMobile
+              ? "flex-1 overflow-y-auto px-4 py-4"
+              : "px-5 py-4"
+          }
+        >
+          <div
+            className={
+              isMobile ? "grid grid-cols-1 gap-3" : "grid grid-cols-2 gap-3"
+            }
+          >
             <div>
               <label className="block text-xs text-slate-500 mb-1">De</label>
               <select
@@ -158,7 +174,10 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
                 required
               >
                 {userOptions.map((u) => (
-                  <option key={u.name} value={u.name === "— Selecciona —" ? "" : u.name}>
+                  <option
+                    key={u.name}
+                    value={u.name === "— Selecciona —" ? "" : u.name}
+                  >
                     {u.name}
                   </option>
                 ))}
@@ -175,7 +194,10 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
                 required
               >
                 {userOptions.map((u) => (
-                  <option key={u.name} value={u.name === "— Selecciona —" ? "" : u.name}>
+                  <option
+                    key={u.name}
+                    value={u.name === "— Selecciona —" ? "" : u.name}
+                  >
                     {u.name}
                   </option>
                 ))}
@@ -183,7 +205,9 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
             </div>
 
             <div className={isMobile ? "col-span-1" : "col-span-2"}>
-              <label className="block text-xs text-slate-500 mb-1">Contenido</label>
+              <label className="block text-xs text-slate-500 mb-1">
+                Contenido
+              </label>
               <textarea
                 className="w-full border rounded-lg px-3 py-2 text-sm min-h-[120px] focus:outline-none focus:ring-2 focus:ring-pink-200"
                 value={text}
@@ -195,7 +219,9 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
             </div>
 
             <div className={isMobile ? "col-span-1" : "col-span-2"}>
-              <label className="block text-xs text-slate-500 mb-1">Vencimiento</label>
+              <label className="block text-xs text-slate-500 mb-1">
+                Vencimiento
+              </label>
               <input
                 type="date"
                 className="w-full border rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-200"
@@ -207,6 +233,7 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
           </div>
         </div>
 
+        {/* footer */}
         <div
           className={
             isMobile
@@ -214,7 +241,11 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
               : "px-5 py-4 border-t border-slate-200"
           }
         >
-          <div className={isMobile ? "grid grid-cols-2 gap-2" : "flex justify-end gap-2"}>
+          <div
+            className={
+              isMobile ? "grid grid-cols-2 gap-2" : "flex justify-end gap-2"
+            }
+          >
             <button
               type="button"
               onClick={handleClose}
