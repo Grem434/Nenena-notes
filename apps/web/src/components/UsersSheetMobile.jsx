@@ -1,108 +1,133 @@
 import React, { useMemo } from "react";
-import {
-  Dialog,
-  DialogHeader,
-  DialogTitle,
-  DialogContent,
-} from "@/components/ui/dialog";
+import { X, Mail, User2 } from "lucide-react";
 import { useUsersStore } from "@/store/useUsersStore";
 import { useNotesStore } from "@/store/useNotesStore";
-import { Mail, User2 } from "lucide-react";
 
-function getCounts(notes, username) {
-  let inbound = 0;
-  let personal = 0;
-  for (const n of notes) {
-    if (!n) continue;
-    if (n.archived || n.deleted) continue;
-    if (n.to !== username) continue;
-    if (n.from === username) personal++;
-    else inbound++;
-  }
-  return { inbound, personal, total: inbound + personal };
+function hsvToRgba(c, alpha = 1) {
+  if (!c) return `rgba(244,114,182,${alpha})`;
+  const h = (((Number(c.h ?? 0) % 360) + 360) % 360);
+  const s = Math.max(0, Math.min(100, Number(c.s ?? 0))) / 100;
+  const v = Math.max(0, Math.min(100, Number(c.v ?? 0))) / 100;
+  const C = v * s;
+  const X = C * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = v - C;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) [r, g, b] = [C, X, 0];
+  else if (h < 120) [r, g, b] = [X, C, 0];
+  else if (h < 180) [r, g, b] = [0, C, X];
+  else if (h < 240) [r, g, b] = [0, X, C];
+  else if (h < 300) [r, g, b] = [X, 0, C];
+  else [r, g, b] = [C, 0, X];
+  const to255 = (n) => Math.round((n + m) * 255);
+  return `rgba(${to255(r)}, ${to255(g)}, ${to255(b)}, ${alpha})`;
 }
 
-export default function UsersSheetMobile({ open, onOpenChange, onSelect }) {
+export default function UsersSheetMobile({
+  open,
+  onOpenChange,
+  onSelectInbound,
+  onSelectPersonal,
+}) {
   const users = useUsersStore((s) => s.users || []);
   const notes = useNotesStore((s) => s.notes || []);
 
-  const countsByUser = useMemo(() => {
-    const map = {};
-    for (const u of users) {
-      map[u.name] = getCounts(notes, u.name);
-    }
-    return map;
+  const usersWithCounts = useMemo(() => {
+    return users.map((u) => {
+      let inbound = 0;
+      let personal = 0;
+      for (const n of notes) {
+        if (!n) continue;
+        if (n.archived || n.deleted) continue;
+        if (n.to !== u.name) continue;
+        if (n.from === u.name) personal++;
+        else inbound++;
+      }
+      return { ...u, inbound, personal };
+    });
   }, [users, notes]);
 
   if (!open) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogHeader>
-        <DialogTitle className="text-sm text-slate-700 px-4 py-2">
-          Destinatarios
-        </DialogTitle>
-      </DialogHeader>
-
-      <DialogContent className="max-h-[70vh] overflow-y-auto rounded-b-2xl p-4">
-        {users.length === 0 ? (
-          <p className="text-xs text-slate-400 px-2 py-4">
-            No hay usuarios todavía.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {users.map((user) => {
-              const counts = countsByUser[user.name] || {
-                inbound: 0,
-                personal: 0,
-                total: 0,
-              };
+    <div className="fixed inset-0 z-[130] lg:hidden">
+      <div
+        className="absolute inset-0 bg-slate-900/20 backdrop-blur-[2px]"
+        onClick={() => onOpenChange?.(false)}
+      />
+      <div className="absolute inset-x-0 bottom-0 bg-white rounded-t-3xl shadow-xl max-h-[75vh] flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+          <h2 className="text-sm font-semibold text-slate-700">Destinatarios</h2>
+          <button
+            onClick={() => onOpenChange?.(false)}
+            className="p-1.5 rounded-full hover:bg-slate-100"
+          >
+            <X className="w-5 h-5 text-slate-500" />
+          </button>
+        </div>
+        <div className="overflow-y-auto py-3 px-3 space-y-2">
+          {usersWithCounts.length === 0 ? (
+            <p className="text-xs text-slate-400 px-1 py-2">
+              No hay usuarios todavía.
+            </p>
+          ) : (
+            usersWithCounts.map((user) => {
+              const dot = hsvToRgba(user.color, 1);
+              const bg1 = hsvToRgba(user.color, 0.18);
+              const bg2 = hsvToRgba(user.color, 0.12);
               return (
-                <button
+                <div
                   key={user.name}
-                  onClick={() => {
-                    onSelect?.(user.name);
-                    onOpenChange?.(false);
-                  }}
-                  className="w-full flex items-center gap-3 bg-slate-50/40 hover:bg-slate-100/80 transition-colors rounded-2xl px-3 py-2.5"
+                  className="flex items-center gap-3 bg-slate-50/50 rounded-2xl px-3 py-2.5"
                 >
                   <span
-                    className="w-8 h-8 rounded-full shrink-0"
-                    style={{ backgroundColor: user.color || "#f472b6" }}
+                    className="w-9 h-9 rounded-full shrink-0"
+                    style={{ backgroundColor: dot }}
                     aria-hidden
                   />
-                  <div className="flex-1 text-left">
-                    <p className="text-sm text-slate-700 leading-none mb-1">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-slate-700 truncate">
                       {user.name}
                     </p>
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 text-[10px] text-slate-600 px-1.5 py-0.5"
-                        title="Notas de otros para este destinatario"
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onSelectInbound?.(user.name);
+                          onOpenChange?.(false);
+                        }}
+                        className="inline-flex items-center gap-0.5 rounded-full text-[10px] px-1.5 py-0.5"
+                        style={{ backgroundColor: bg1 }}
+                        title="Notas que le han enviado otros"
                       >
                         <Mail className="w-3 h-3" />
-                        {counts.inbound}
-                      </span>
-                      <span
-                        className="inline-flex items-center gap-0.5 rounded-full bg-violet-50 text-[10px] text-violet-700 px-1.5 py-0.5"
+                        {user.inbound}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onSelectPersonal?.(user.name);
+                          onOpenChange?.(false);
+                        }}
+                        className="inline-flex items-center gap-0.5 rounded-full text-[10px] px-1.5 py-0.5"
+                        style={{ backgroundColor: bg2 }}
                         title="Notas personales de este usuario"
                       >
                         <User2 className="w-3 h-3" />
-                        {counts.personal}
-                      </span>
-                      {counts.total > 0 ? (
-                        <span className="inline-flex items-center rounded-full bg-pink-500/5 text-pink-500 text-[10px] px-2 py-0.5">
-                          {counts.total}
-                        </span>
-                      ) : null}
+                        {user.personal}
+                      </button>
                     </div>
                   </div>
-                </button>
+                </div>
               );
-            })}
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
+            })
+          )}
+        </div>
+        <div className="px-4 pb-4 pt-1">
+          <p className="text-[10px] text-slate-400">
+            📨 de otros · 👤 personales
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -408,7 +408,18 @@ export default function App() {
         <RecipientsSidebar
           selectedRecipient={selectedRecipient}
           setSelectedRecipient={setSelectedRecipient}
+          onSelectInbound={(name) => {
+            setSelectedPersonal(null);
+            setSelectedRecipient(name);
+            setFilter("todas");
+          }}
+          onSelectPersonal={(name) => {
+            setSelectedRecipient(null);
+            setSelectedPersonal(name);
+            setFilter("personales");
+          }}
         />
+
 
         <NoteModal
           open={open}
@@ -422,7 +433,12 @@ export default function App() {
       <UsersSheetMobile
         open={openUsers}
         onOpenChange={setOpenUsers}
-        onSelect={(name) => {
+        onSelectInbound={(name) => {
+          setSelectedPersonal(null);
+          setSelectedRecipient(name);
+          setFilter("todas");
+        }}
+        onSelectPersonal={(name) => {
           setSelectedRecipient(null);
           setSelectedPersonal(name);
           setFilter("personales");
