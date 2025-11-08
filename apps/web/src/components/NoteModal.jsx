@@ -27,7 +27,7 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [text, setText] = useState("");
-  const [dueDate, setDueDate] = useState(""); // YYYY-MM-DD
+  const [dueDate, setDueDate] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
   const lastSubmitAtRef = useRef(0);
@@ -70,8 +70,9 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (submitting) return;
+
     const now = Date.now();
-    if (now - lastSubmitAtRef.current < 800) return; // cooldown anti-doble tap
+    if (now - lastSubmitAtRef.current < 800) return;
     lastSubmitAtRef.current = now;
 
     if (!from || !to) {
@@ -105,12 +106,15 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
       role="dialog"
       aria-modal="true"
       onKeyDown={(e) => e.key === "Escape" && handleClose()}
-      // si clicas en el fondo, cerramos
-      onClick={handleClose}
+      // 👇 solo cerramos si el click fue en el overlay, no en los hijos
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          handleClose();
+        }
+      }}
     >
       <form
         onSubmit={handleSubmit}
-        // 👇 esto evita que el click dentro cierre el modal en móvil
         onClick={(e) => e.stopPropagation()}
         className={[
           "bg-white shadow-xl border border-slate-200",
@@ -143,7 +147,7 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
 
         <div className={isMobile ? "flex-1 overflow-y-auto px-4 py-4" : "px-5 py-4"}>
           <div className={isMobile ? "grid grid-cols-1 gap-3" : "grid grid-cols-2 gap-3"}>
-            <div className={isMobile ? "" : "col-span-1"}>
+            <div>
               <label className="block text-xs text-slate-500 mb-1">De</label>
               <select
                 ref={firstFieldRef}
@@ -161,7 +165,7 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
               </select>
             </div>
 
-            <div className={isMobile ? "" : "col-span-1"}>
+            <div>
               <label className="block text-xs text-slate-500 mb-1">Para</label>
               <select
                 className="w-full border rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-200"
