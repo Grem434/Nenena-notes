@@ -105,16 +105,26 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
       role="dialog"
       aria-modal="true"
       onKeyDown={(e) => e.key === "Escape" && handleClose()}
+      // si clicas en el fondo, cerramos
+      onClick={handleClose}
     >
       <form
         onSubmit={handleSubmit}
+        // 👇 esto evita que el click dentro cierre el modal en móvil
+        onClick={(e) => e.stopPropagation()}
         className={[
           "bg-white shadow-xl border border-slate-200",
           "flex flex-col",
           isMobile ? "fixed inset-0 rounded-none" : "w-full max-w-lg rounded-2xl mx-4 my-6",
         ].join(" ")}
       >
-        <div className={isMobile ? "px-4 py-3 border-b border-slate-200 sticky top-0 bg-white z-10" : "px-5 py-4 border-b border-slate-200"}>
+        <div
+          className={
+            isMobile
+              ? "px-4 py-3 border-b border-slate-200 sticky top-0 bg-white z-10"
+              : "px-5 py-4 border-b border-slate-200"
+          }
+        >
           <div className="flex items-center justify-between">
             <h3 className="text-base sm:text-lg font-semibold text-slate-800">
               {isEditing ? "Editar nota" : "Nueva nota"}
@@ -140,6 +150,7 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
                 className="w-full border rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-200"
                 value={from}
                 onChange={(e) => setFrom(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
                 required
               >
                 {userOptions.map((u) => (
@@ -156,6 +167,7 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
                 className="w-full border rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-200"
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
                 required
               >
                 {userOptions.map((u) => (
@@ -172,6 +184,7 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
                 className="w-full border rounded-lg px-3 py-2 text-sm min-h-[120px] focus:outline-none focus:ring-2 focus:ring-pink-200"
                 value={text}
                 onChange={(e) => setText(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
                 placeholder="Escribe la nota…"
                 rows={isMobile ? 6 : 5}
               />
@@ -184,12 +197,19 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
                 className="w-full border rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-200"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
               />
             </div>
           </div>
         </div>
 
-        <div className={isMobile ? "px-4 py-3 border-t border-slate-200 sticky bottom-0 bg-white z-10" : "px-5 py-4 border-t border-slate-200"}>
+        <div
+          className={
+            isMobile
+              ? "px-4 py-3 border-t border-slate-200 sticky bottom-0 bg-white z-10"
+              : "px-5 py-4 border-t border-slate-200"
+          }
+        >
           <div className={isMobile ? "grid grid-cols-2 gap-2" : "flex justify-end gap-2"}>
             <button
               type="button"
