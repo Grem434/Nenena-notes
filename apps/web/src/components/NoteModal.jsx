@@ -32,6 +32,10 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
   const [submitting, setSubmitting] = useState(false);
   const lastSubmitAtRef = useRef(0);
 
+  // 🎙️ dictado
+  const [listening, setListening] = useState(false);
+  const recognitionRef = useRef(null);
+
   const isEditing = Boolean(editingNote);
   const isMobile = useMemo(
     () =>
@@ -43,6 +47,7 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
 
   const firstFieldRef = useRef(null);
 
+  // rellenar campos al abrir
   useEffect(() => {
     if (editingNote) {
       setFrom(editingNote.from || "");
@@ -55,12 +60,54 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
       setText("");
       setDueDate("");
     }
+    // al abrir, reiniciamos dictado
+    setListening(false);
   }, [editingNote, open]);
 
+  // foco inicial
   useEffect(() => {
     if (open && firstFieldRef.current) {
       setTimeout(() => firstFieldRef.current?.focus(), 50);
     }
+  }, [open]);
+
+  // preparar SpeechRecognition cuando abra el modal
+  useEffect(() => {
+    if (!open) return;
+    // iOS Chrome PWA puede no tener esto
+    const SpeechRecognition =
+      typeof window !== "undefined" &&
+      (window.SpeechRecognition || window.webkitSpeechRecognition);
+
+    if (!SpeechRecognition) {
+      recognitionRef.current = null;
+      return;
+    }
+
+    const rec = new SpeechRecognition();
+    rec.lang = "es-ES";
+    rec.continuous = false;
+    rec.interimResults = false;
+
+    rec.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      // añadimos al texto actual
+      setText((prev) => (prev ? prev + " " + transcript : transcript));
+    };
+
+    rec.onend = () => {
+      setListening(false);
+    };
+
+    rec.onerror = () => {
+      setListening(false);
+      notify({
+        variant: "warning",
+        title: "No se pudo usar el micrófono",
+      });
+    };
+
+    recognitionRef.current = rec;
   }, [open]);
 
   if (!open) return null;
@@ -72,7 +119,7 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
     if (submitting) return;
 
     const now = Date.now();
-    if (now - lastSubmitAtRef.current < 800) return;
+    if (now - lastSubmitAtRef.current < 800) return; // anti doble tap
     lastSubmitAtRef.current = now;
 
     if (!from || !to) {
@@ -100,6 +147,33 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
 
   const userOptions = [{ name: "— Selecciona —" }, ...users];
 
+  const handleDictateClick = () => {
+    const rec = recognitionRef.current;
+    if (!rec) {
+      // iOS PWA / navegador sin soporte
+      notify({
+        variant: "warning",
+        title: "Dictado no disponible en este dispositivo",
+      });
+      return;
+    }
+    if (!listening) {
+      try {
+        setListening(true);
+        rec.start();
+      } catch {
+        setListening(false);
+        notify({
+          variant: "warning",
+          title: "No se pudo iniciar el dictado",
+        });
+      }
+    } else {
+      rec.stop();
+      setListening(false);
+    }
+  };
+
   return (
     <div
       className={`fixed inset-0 z-[100] ${
@@ -108,7 +182,7 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
       role="dialog"
       aria-modal="true"
       onKeyDown={(e) => e.key === "Escape" && handleClose()}
-      // 👇 SOLO escritorio: cerrar al tocar fondo
+      // 👇 en móvil NO cerramos por fondo para evitar cierre accidental
       onClick={(e) => {
         if (!isMobile && e.target === e.currentTarget) {
           handleClose();
@@ -204,10 +278,24 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
               </select>
             </div>
 
+            {/* contenido + micro */}
             <div className={isMobile ? "col-span-1" : "col-span-2"}>
-              <label className="block text-xs text-slate-500 mb-1">
-                Contenido
-              </label>
+              <div className="flex items-center justify-between mb-1 gap-2">
+                <label className="block text-xs text-slate-500">
+                  Contenido
+                </label>
+                <button
+                  type="button"
+                  onClick={handleDictateClick}
+                  className={`text-[10px] px-2 py-1 rounded-lg transition ${
+                    listening
+                      ? "bg-pink-100 text-pink-700"
+                      : "bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  {listening ? "Grabando…" : "🎙️ Dictar"}
+                </button>
+              </div>
               <textarea
                 className="w-full border rounded-lg px-3 py-2 text-sm min-h-[120px] focus:outline-none focus:ring-2 focus:ring-pink-200"
                 value={text}
@@ -258,7 +346,11 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
               disabled={submitting}
               className="inline-flex items-center justify-center h-10 px-4 rounded-lg bg-pink-500 text-white hover:bg-pink-600 disabled:opacity-60"
             >
-              {isEditing ? "Guardar cambios" : submitting ? "Creando…" : "Crear nota"}
+              {isEditing
+                ? "Guardar cambios"
+                : submitting
+                ? "Creando…"
+                : "Crear nota"}
             </button>
           </div>
         </div>
