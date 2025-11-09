@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Trash2, Undo2, Archive, CheckCircle2, Calendar, X, Mic } from "lucide-react";
 import { useNotesStore } from "@/store/useNotesStore";
 import { useUIStore } from "@/store/useUIStore";
@@ -13,7 +13,6 @@ function formatShortDM(iso) {
   const mi = String(d.getMinutes()).padStart(2, "0");
   return `${dd}/${mm} ${hh}:${mi}`;
 }
-
 function formatDateOnly(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -23,7 +22,6 @@ function formatDateOnly(iso) {
   const yyyy = d.getFullYear();
   return `${dd}/${mm}/${yyyy}`;
 }
-
 function isoToDateInput(iso) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -33,7 +31,6 @@ function isoToDateInput(iso) {
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
-
 function dateInputToIso(yyyy_mm_dd) {
   if (!yyyy_mm_dd) return null;
   const [y, m, d] = yyyy_mm_dd.split("-").map(Number);
@@ -43,13 +40,12 @@ function dateInputToIso(yyyy_mm_dd) {
   return dt.toISOString();
 }
 
-/* ===== detección compatibilidad voz ===== */
+/* ===== compat dictado ===== */
 function hasSpeechRecognition() {
   if (typeof window === "undefined") return false;
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   return !!SR;
 }
-
 function isIOSWebKit() {
   if (typeof navigator === "undefined") return false;
   const ua = navigator.userAgent || "";
@@ -58,7 +54,7 @@ function isIOSWebKit() {
   return isIOS && isWebKit;
 }
 
-/* ====== componente ====== */
+/* ===== componente ===== */
 export default function NoteFocus() {
   const { focusedNoteId, clearFocusedNote } = useUIStore();
   const {
@@ -88,6 +84,11 @@ export default function NoteFocus() {
     [notes, focusedNoteId]
   );
 
+  // Texto editable
+  const [textDraft, setTextDraft] = useState(note?.text ?? "");
+  const textRef = useRef(null);
+
+  // Respuesta
   const [replyText, setReplyText] = useState("");
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef(null);
@@ -96,49 +97,61 @@ export default function NoteFocus() {
   const speechSupported = hasSpeechRecognition();
   const forceDisableSpeech = isIOSWebKit(); // iPhone/iPad: desactiva botón y muestra pista
 
+  useEffect(() => {
+    setTextDraft(note?.text ?? "");
+  }, [note?.id]);
+
   if (!focusedNoteId || !note) return null;
 
   const close = () => {
     clearFocusedNote();
     setReplyText("");
     try {
-      if (recognitionRef.current && listening) {
-        recognitionRef.current.stop?.();
-      }
+      if (recognitionRef.current && listening) recognitionRef.current.stop?.();
     } catch {}
     setListening(false);
   };
 
-  /* ====== acciones header ====== */
+  /* ===== header actions ===== */
   const handleSoftDelete = () => {
     if (!note.deleted) {
       deleteNote(note.id);
       close();
     }
   };
-
   const handleArchive = () => {
     if (note.archived) unarchiveNote(note.id);
     else archiveNote(note.id);
   };
-
   const handleResolved = () => {
     toggleStatus(note.id);
   };
 
-  /* ====== dueAt (fecha tope) ====== */
+  /* ===== dueAt ===== */
   const dueInputValue = isoToDateInput(note.dueAt);
-
   const handleDueChange = (e) => {
     const iso = dateInputToIso(e.target.value);
     updateNote(note.id, { dueAt: iso }); // null = sin fecha
   };
-
   const clearDue = () => {
     updateNote(note.id, { dueAt: null });
   };
 
-  /* ====== responder ====== */
+  /* ===== editar texto ===== */
+  const saveTextIfChanged = () => {
+    const next = (textDraft ?? "").replace(/\s+$/,""); // trim end suave
+    if (next !== (note.text ?? "")) {
+      updateNote(note.id, { text: next });
+    }
+  };
+  const handleTextKeyDown = (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      textRef.current?.blur(); // onBlur guarda
+    }
+  };
+
+  /* ===== responder ===== */
   const handleAddReply = (e) => {
     e.preventDefault();
     const t = replyText.trim();
@@ -148,18 +161,15 @@ export default function NoteFocus() {
     close(); // cerrar tras enviar
   };
 
-  /* ====== dictado voz: auto-stop por silencio ====== */
+  /* ===== dictado: auto-stop por silencio ===== */
   const startVoiceOnce = () => {
     const SR =
       (typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition)) ||
       null;
-
     if (!SR) return;
 
     if (listening) {
-      try {
-        recognitionRef.current?.stop();
-      } catch {}
+      try { recognitionRef.current?.stop(); } catch {}
       setListening(false);
       return;
     }
@@ -170,16 +180,13 @@ export default function NoteFocus() {
     rec.continuous = false;
     rec.interimResults = false;
 
-    const stopSafely = () => {
-      try { rec.stop(); } catch {}
-    };
+    const stopSafely = () => { try { rec.stop(); } catch {} };
 
     rec.onstart = () => {
       setListening(true);
       if (endSilenceTimer.current) clearTimeout(endSilenceTimer.current);
-      endSilenceTimer.current = setTimeout(stopSafely, 20000); // failsafe
+      endSilenceTimer.current = setTimeout(stopSafely, 20000);
     };
-
     rec.onresult = (ev) => {
       let finalText = "";
       for (let i = ev.resultIndex; i < ev.results.length; i++) {
@@ -190,89 +197,58 @@ export default function NoteFocus() {
         setReplyText((prev) => (prev ? `${prev} ${finalText.trim()}` : finalText.trim()));
       }
     };
-
-    rec.onspeechend = () => {
-      stopSafely();
-    };
-
-    rec.onerror = () => {
-      stopSafely();
-      setListening(false);
-    };
-
+    rec.onspeechend = () => { stopSafely(); };
+    rec.onerror = () => { stopSafely(); setListening(false); };
     rec.onend = () => {
-      if (endSilenceTimer.current) {
-        clearTimeout(endSilenceTimer.current);
-        endSilenceTimer.current = null;
-      }
+      if (endSilenceTimer.current) { clearTimeout(endSilenceTimer.current); endSilenceTimer.current = null; }
       setListening(false);
     };
 
-    try {
-      rec.start();
-    } catch {
-      setListening(false);
-    }
+    try { rec.start(); } catch { setListening(false); }
   };
 
-  /* ====== header actions (condicional por papelera) ====== */
+  /* ===== header actions (condicional por papelera) ===== */
   const HeaderActions = () => {
     if (note.deleted) {
-      // SOLO Restaurar + Eliminar definitivamente
       return (
         <div className="flex items-center gap-2">
           <button
-            onClick={() => {
-              restoreNote(note.id);
-              close();
-            }}
+            onClick={() => { restoreNote(note.id); close(); }}
             className="p-2 rounded-full hover:bg-slate-100 text-sky-700"
-            title="Restaurar"
-            aria-label="Restaurar"
+            title="Restaurar" aria-label="Restaurar"
           >
             <Undo2 className="w-5 h-5" />
           </button>
           <button
-            onClick={() => {
-              hardRemove(note.id);
-              close();
-            }}
+            onClick={() => { hardRemove(note.id); close(); }}
             className="p-2 rounded-full hover:bg-slate-100 text-rose-700"
-            title="Eliminar definitivamente"
-            aria-label="Eliminar definitivamente"
+            title="Eliminar definitivamente" aria-label="Eliminar definitivamente"
           >
             <Trash2 className="w-5 h-5" />
           </button>
         </div>
       );
     }
-
-    // Estado normal
     return (
       <div className="flex items-center gap-2">
         <button
           onClick={handleResolved}
-          className={`p-2 rounded-full hover:bg-slate-100 ${
-            note.status === "resuelta" ? "text-emerald-500" : "text-slate-500"
-          }`}
-          title="Marcar resuelta"
-          aria-label="Marcar resuelta"
+          className={`p-2 rounded-full hover:bg-slate-100 ${note.status === "resuelta" ? "text-emerald-500" : "text-slate-500"}`}
+          title="Marcar resuelta" aria-label="Marcar resuelta"
         >
           <CheckCircle2 className="w-5 h-5" />
         </button>
         <button
           onClick={handleArchive}
           className="p-2 rounded-full hover:bg-slate-100 text-slate-500"
-          title={note.archived ? "Desarchivar" : "Archivar"}
-          aria-label={note.archived ? "Desarchivar" : "Archivar"}
+          title={note.archived ? "Desarchivar" : "Archivar"} aria-label={note.archived ? "Desarchivar" : "Archivar"}
         >
           <Archive className="w-5 h-5" />
         </button>
         <button
           onClick={handleSoftDelete}
           className="p-2 rounded-full hover:bg-slate-100 text-rose-500"
-          title="Mover a papelera"
-          aria-label="Mover a papelera"
+          title="Mover a papelera" aria-label="Mover a papelera"
         >
           <Trash2 className="w-5 h-5" />
         </button>
@@ -283,11 +259,7 @@ export default function NoteFocus() {
   return (
     <div className="fixed inset-0 z-[120]">
       {/* backdrop (tocar fuera cierra) */}
-      <button
-        className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"
-        onClick={close}
-        aria-label="Cerrar"
-      />
+      <button className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={close} aria-label="Cerrar" />
 
       <div className="absolute inset-x-0 md:inset-auto md:left-1/2 md:-translate-x-1/2 top-[8vh] md:top-[10vh] w-full md:w-[760px] bg-white rounded-2xl shadow-xl max-h-[84vh] overflow-hidden flex flex-col">
         {/* Header */}
@@ -310,7 +282,6 @@ export default function NoteFocus() {
               {note.deleted && <span className="ml-2 text-rose-500">· En papelera</span>}
             </div>
           </div>
-
           <HeaderActions />
         </div>
 
@@ -319,9 +290,7 @@ export default function NoteFocus() {
           {/* Fecha tope de resolución */}
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-slate-500" />
-            <label className="text-xs font-semibold text-slate-600">
-              Fecha de resolución (opcional):
-            </label>
+            <label className="text-xs font-semibold text-slate-600">Fecha de resolución (opcional):</label>
             <input
               type="date"
               value={dueInputValue}
@@ -331,9 +300,7 @@ export default function NoteFocus() {
             />
             {dueInputValue ? (
               <button
-                type="button"
-                onClick={clearDue}
-                disabled={!!note.deleted}
+                type="button" onClick={clearDue} disabled={!!note.deleted}
                 className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] border border-slate-200 hover:bg-slate-50 disabled:opacity-60"
                 title="Quitar fecha"
               >
@@ -346,10 +313,23 @@ export default function NoteFocus() {
             )}
           </div>
 
-          {/* Texto de la nota */}
-          <p className="text-sm text-slate-700 whitespace-pre-line">
-            {note.text || <em className="text-slate-400">Sin texto…</em>}
-          </p>
+          {/* Texto editable de la nota */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">Texto de la nota</label>
+            <textarea
+              ref={textRef}
+              value={textDraft}
+              onChange={(e) => setTextDraft(e.target.value)}
+              onBlur={saveTextIfChanged}
+              onKeyDown={handleTextKeyDown}
+              disabled={!!note.deleted}
+              className="w-full min-h-[120px] rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-pink-200 disabled:opacity-60"
+              placeholder="Escribe o edita la nota…"
+            />
+            <p className="mt-1 text-[11px] text-slate-400">
+              Consejo: <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Enter</kbd> para guardar sin salir.
+            </p>
+          </div>
 
           {/* Respuestas (con fecha sin hora) */}
           <div>
@@ -357,10 +337,7 @@ export default function NoteFocus() {
             {Array.isArray(note.replies) && note.replies.length > 0 ? (
               <ul className="space-y-2">
                 {note.replies.map((r, idx) => (
-                  <li
-                    key={r.id || r.createdAt || idx}
-                    className="bg-slate-50 rounded-xl px-3 py-2 text-sm text-slate-700"
-                  >
+                  <li key={r.id || r.createdAt || idx} className="bg-slate-50 rounded-xl px-3 py-2 text-sm text-slate-700">
                     <p className="text-[11px] text-slate-400 mb-0.5">
                       {r.author || "—"} · {formatDateOnly(r.createdAt)}
                     </p>
@@ -381,9 +358,7 @@ export default function NoteFocus() {
             onClick={startVoiceOnce}
             disabled={!speechSupported || forceDisableSpeech || !!note.deleted}
             className={`p-2 rounded-xl border ${
-              listening
-                ? "border-rose-300 text-rose-600 bg-rose-50"
-                : "border-slate-200 text-slate-600 hover:bg-slate-50"
+              listening ? "border-rose-300 text-rose-600 bg-rose-50" : "border-slate-200 text-slate-600 hover:bg-slate-50"
             } disabled:opacity-50`}
             title={
               forceDisableSpeech
