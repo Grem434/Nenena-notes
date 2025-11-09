@@ -33,6 +33,22 @@ function dateInputToIso(yyyy_mm_dd) {
   return dt.toISOString();
 }
 
+/* ===== detección compatibilidad voz ===== */
+function hasSpeechRecognition() {
+  if (typeof window === "undefined") return false;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  return !!SR;
+}
+
+function isIOSWebKit() {
+  if (typeof navigator === "undefined") return false;
+  // Cubre Safari y cualquier navegador en iOS (todos usan WebKit)
+  const ua = navigator.userAgent || "";
+  const isIOS = /iPad|iPhone|iPod/.test(ua);
+  const isWebKit = /WebKit/.test(ua);
+  return isIOS && isWebKit;
+}
+
 /* ====== componente ====== */
 export default function NoteFocus() {
   const { focusedNoteId, clearFocusedNote } = useUIStore();
@@ -67,6 +83,9 @@ export default function NoteFocus() {
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef(null);
   const endSilenceTimer = useRef(null);
+
+  const speechSupported = hasSpeechRecognition();
+  const forceDisableSpeech = isIOSWebKit(); // en iPhone/iPad desactivamos botón
 
   if (!focusedNoteId || !note) return null;
 
@@ -122,18 +141,14 @@ export default function NoteFocus() {
     close();
   };
 
-  /* ====== dictado por voz auto-stop por silencio ======
-     - Pulsa una vez → empieza a escuchar.
-     - Al dejar de hablar, se detiene solo.
-     - Usa Web Speech API (Recognition), sin resultados intermedios.
-  ===================================================== */
+  /* ====== dictado por voz auto-stop por silencio ====== */
   const startVoiceOnce = () => {
     const SR =
       (typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition)) ||
       null;
 
     if (!SR) {
-      alert("Tu navegador no soporta dictado por voz (Web Speech API).");
+      // No soportado (Android Firefox / iOS en general, etc.)
       return;
     }
 
@@ -148,10 +163,9 @@ export default function NoteFocus() {
 
     const rec = new SR();
     recognitionRef.current = rec;
-    // Igual que en "nueva nota": sin continuo, y sin interinos → se corta por silencio
     rec.lang = "es-ES";
-    rec.continuous = false;
-    rec.interimResults = false;
+    rec.continuous = false;      // se detiene en silencio automáticamente
+    rec.interimResults = false;  // solo texto final
 
     const stopSafely = () => {
       try { rec.stop(); } catch {}
@@ -159,9 +173,8 @@ export default function NoteFocus() {
 
     rec.onstart = () => {
       setListening(true);
-      // por si algún motor no dispara onend al silencio, añadimos un “failsafe”
       if (endSilenceTimer.current) clearTimeout(endSilenceTimer.current);
-      endSilenceTimer.current = setTimeout(stopSafely, 20000); // 20s máximo de escucha
+      endSilenceTimer.current = setTimeout(stopSafely, 20000); // failsafe: 20s
     };
 
     rec.onresult = (ev) => {
@@ -176,7 +189,6 @@ export default function NoteFocus() {
     };
 
     rec.onspeechend = () => {
-      // se llama cuando deja de captar voz → paramos
       stopSafely();
     };
 
@@ -357,14 +369,23 @@ export default function NoteFocus() {
           </div>
         </div>
 
-        {/* Responder (voz auto-stop) */}
+        {/* Responder (voz auto-stop o pista en iPhone) */}
         <form onSubmit={handleAddReply} className="border-t border-slate-100 px-4 py-3 flex items-center gap-2">
           <button
             type="button"
             onClick={startVoiceOnce}
-            className={`p-2 rounded-xl border ${listening ? "border-rose-300 text-rose-600 bg-rose-50" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
-            title={listening ? "Escuchando… (se detiene al silencio)" : "Dictar por voz"}
-            aria-label={listening ? "Escuchando… (se detiene al silencio)" : "Dictar por voz"}
+            disabled={!speechSupported || forceDisableSpeech || !!note.deleted}
+            className={`p-2 rounded-xl border ${
+              listening
+                ? "border-rose-300 text-rose-600 bg-rose-50"
+                : "border-slate-200 text-slate-600 hover:bg-slate-50"
+            } disabled:opacity-50`}
+            title={
+              forceDisableSpeech
+                ? "En iPhone usa el micrófono del teclado para dictar"
+                : (!speechSupported ? "Dictado por voz no soportado en este navegador" : "Dictar por voz")
+            }
+            aria-label="Dictar por voz"
           >
             <Mic className="w-5 h-5" />
           </button>
@@ -373,9 +394,10 @@ export default function NoteFocus() {
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
             className="flex-1 border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-200"
-            placeholder="Responder…"
+            placeholder={forceDisableSpeech ? "Puedes usar el micrófono del teclado de iPhone…" : "Responder…"}
             disabled={!!note.deleted}
           />
+
           <button
             type="submit"
             disabled={!!note.deleted}
@@ -384,6 +406,12 @@ export default function NoteFocus() {
             Enviar
           </button>
         </form>
+
+        {forceDisableSpeech && !note.deleted && (
+          <div className="px-4 pb-3 text-[11px] text-slate-400">
+            💡 En iPhone: toca el micrófono del <strong>teclado</strong> para dictar y el texto entrará aquí.
+          </div>
+        )}
       </div>
     </div>
   );
