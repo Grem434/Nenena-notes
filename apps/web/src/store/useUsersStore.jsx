@@ -28,6 +28,32 @@ const cleanHSV = (c) => ({
   s: clamp(c?.s, 0, 100),
   v: clamp(c?.v, 0, 100),
 });
+// --- reparar nombres corruptos guardados como JSON string ---
+const looksLikeJSONName = (s) => typeof s === "string" && s.trim().startsWith("{") && s.includes('"name"');
+function fixCorruptedUsers(arr) {
+  let changed = false;
+  const now = new Date().toISOString();
+  const next = (arr || []).map((u) => {
+    if (u && looksLikeJSONName(u.name)) {
+      try {
+        const parsed = JSON.parse(u.name);
+        const fixed = {
+          ...u,
+          name: String(parsed.name || "Usuario"),
+          color: cleanHSV(parsed.color || u.color || { h: 200, s: 80, v: 90 }),
+          updated_at: now,
+        };
+        changed = true;
+        return fixed;
+      } catch {
+        return u;
+      }
+    }
+    return u;
+  });
+  return { next, changed };
+}
+
 
 /** ===========================================================
  *  Store
@@ -39,7 +65,12 @@ export const useUsersStore = create(
 
       /** -------------------- CRUD local -------------------- **/
       ensureDefaults: () => {
-        const cur = get().users || [];
+        const cur0 = get().users || [];
+        // Reparar entradas corruptas con name = JSON string
+        const { next: repaired, changed } = fixCorruptedUsers(cur0);
+        if (changed) set({ users: repaired });
+        const cur = changed ? repaired : cur0;
+
         const names = new Set(cur.map((u) => u.name));
         const add = DEFAULT_USERS.filter((n) => !names.has(n));
         if (add.length === 0) return;
@@ -54,15 +85,39 @@ export const useUsersStore = create(
         ];
         set({ users: withDefaults });
       },
+            updated_at: new Date().toISOString(),
+          })),
+        ];
+        set({ users: withDefaults });
+      },
 
-      addUser: (name) => {
+      addUser: (input) => {
+        const now = new Date().toISOString();
+        let name = "";
+        let color = { h: Math.random() * 360, s: 80, v: 90 };
+        if (typeof input === "string") {
+          if (looksLikeJSONName(input)) {
+            try {
+              const parsed = JSON.parse(input);
+              name = String(parsed?.name || "");
+              if (parsed?.color) color = cleanHSV(parsed.color);
+            } catch { name = String(input || ""); }
+          } else {
+            name = input;
+          }
+        } else if (input && typeof input === "object") {
+          name = String(input.name || "");
+          if (input.color) color = cleanHSV(input.color);
+        }
+        name = name.trim();
         if (!name) return;
+
         const cur = get().users || [];
         if (cur.some((u) => u.name === name)) return;
-        const u = {
-          id: nanoid(),
-          name,
-          color: { h: Math.random() * 360, s: 80, v: 90 },
+        const u = { id: nanoid(), name, color, updated_at: now };
+        set({ users: [...cur, u] });
+        get()._syncEnabled && get().upsertRemote(name, color, now);
+      },
           updated_at: new Date().toISOString(),
         };
         set({ users: [...cur, u] });
