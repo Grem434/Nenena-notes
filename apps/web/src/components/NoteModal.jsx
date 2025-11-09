@@ -4,6 +4,9 @@ import { useNotesStore } from "@/store/useNotesStore";
 import { useUsersStore } from "@/store/useUsersStore";
 import { notify } from "@/lib/notify";
 
+const HIDE_MIC_THRESHOLD = 600; // si hay más de 600 chars en escritorio, ocultamos el botón 🎙️
+
+/* ===== helpers fecha ===== */
 function toDateInputValue(iso) {
   if (!iso) return "";
   try {
@@ -17,6 +20,20 @@ function toDateInputValue(iso) {
   } catch {
     return "";
   }
+}
+
+/* ===== compatibilidad dictado ===== */
+function hasSpeechRecognition() {
+  if (typeof window === "undefined") return false;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  return !!SR;
+}
+function isIOSWebKit() {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  const isIOS = /iPad|iPhone|iPod/.test(ua);
+  const isWebKit = /WebKit/.test(ua);
+  return isIOS && isWebKit;
 }
 
 export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
@@ -44,6 +61,10 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
       window.matchMedia("(max-width: 768px)").matches,
     [open]
   );
+  const isDesktop = !isMobile;
+
+  const speechSupported = hasSpeechRecognition();
+  const forceDisableSpeech = isIOSWebKit(); // iPhone/iPad: desactivar botón y mostrar pista
 
   const firstFieldRef = useRef(null);
 
@@ -62,7 +83,7 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
     }
     // al abrir, reiniciamos dictado
     setListening(false);
-  }, [editingNote, open]);
+  }, [editingNote, open]); // mantiene tu comportamiento original. :contentReference[oaicite:1]{index=1}
 
   // foco inicial
   useEffect(() => {
@@ -71,10 +92,9 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
     }
   }, [open]);
 
-  // preparar SpeechRecognition cuando abra el modal
+  // preparar SpeechRecognition cuando abra el modal (igual que tenías)
   useEffect(() => {
     if (!open) return;
-    // iOS Chrome PWA puede no tener esto
     const SpeechRecognition =
       typeof window !== "undefined" &&
       (window.SpeechRecognition || window.webkitSpeechRecognition);
@@ -86,12 +106,11 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
 
     const rec = new SpeechRecognition();
     rec.lang = "es-ES";
-    rec.continuous = false;
-    rec.interimResults = false;
+    rec.continuous = false;     // auto-stop por silencio (idéntico a tu enfoque actual). :contentReference[oaicite:2]{index=2}
+    rec.interimResults = false; // sin resultados interinos. :contentReference[oaicite:3]{index=3}
 
     rec.onresult = (event) => {
       const transcript = event.results[0][0].transcript;
-      // añadimos al texto actual
       setText((prev) => (prev ? prev + " " + transcript : transcript));
     };
 
@@ -150,7 +169,6 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
   const handleDictateClick = () => {
     const rec = recognitionRef.current;
     if (!rec) {
-      // iOS PWA / navegador sin soporte
       notify({
         variant: "warning",
         title: "Dictado no disponible en este dispositivo",
@@ -173,6 +191,12 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
       setListening(false);
     }
   };
+
+  // Mostrar/ocultar botón 🎙️ según reglas pedidas
+  const showMicButton =
+    !forceDisableSpeech && // en iOS mostramos pista y desactivamos botón
+    speechSupported &&
+    !(isDesktop && (text?.length || 0) > HIDE_MIC_THRESHOLD);
 
   return (
     <div
@@ -225,18 +249,8 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
         </div>
 
         {/* body */}
-        <div
-          className={
-            isMobile
-              ? "flex-1 overflow-y-auto px-4 py-4"
-              : "px-5 py-4"
-          }
-        >
-          <div
-            className={
-              isMobile ? "grid grid-cols-1 gap-3" : "grid grid-cols-2 gap-3"
-            }
-          >
+        <div className={isMobile ? "flex-1 overflow-y-auto px-4 py-4" : "px-5 py-4"}>
+          <div className={isMobile ? "grid grid-cols-1 gap-3" : "grid grid-cols-2 gap-3"}>
             <div>
               <label className="block text-xs text-slate-500 mb-1">De</label>
               <select
@@ -278,24 +292,28 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
               </select>
             </div>
 
-            {/* contenido + micro */}
+            {/* contenido + mic */}
             <div className={isMobile ? "col-span-1" : "col-span-2"}>
               <div className="flex items-center justify-between mb-1 gap-2">
                 <label className="block text-xs text-slate-500">
                   Contenido
                 </label>
-                <button
-                  type="button"
-                  onClick={handleDictateClick}
-                  className={`text-[10px] px-2 py-1 rounded-lg transition ${
-                    listening
-                      ? "bg-pink-100 text-pink-700"
-                      : "bg-slate-100 text-slate-500"
-                  }`}
-                >
-                  {listening ? "Grabando…" : "🎙️ Dictar"}
-                </button>
+
+                {showMicButton && (
+                  <button
+                    type="button"
+                    onClick={handleDictateClick}
+                    className={`text-[10px] px-2 py-1 rounded-lg transition ${
+                      listening ? "bg-pink-100 text-pink-700" : "bg-slate-100 text-slate-500"
+                    }`}
+                    title="Dictar por voz"
+                    aria-label="Dictar por voz"
+                  >
+                    {listening ? "Grabando…" : "🎙️ Dictar"}
+                  </button>
+                )}
               </div>
+
               <textarea
                 className="w-full border rounded-lg px-3 py-2 text-sm min-h-[120px] focus:outline-none focus:ring-2 focus:ring-pink-200"
                 value={text}
@@ -304,6 +322,19 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
                 placeholder="Escribe la nota…"
                 rows={isMobile ? 6 : 5}
               />
+
+              {/* Pista específica para iPhone/iPad */}
+              {forceDisableSpeech && (
+                <p className="mt-1 text-[11px] text-slate-400">
+                  💡 En iPhone/iPad usa el micrófono del <strong>teclado</strong> para dictar.
+                </p>
+              )}
+              {/* Si en escritorio ocultamos el botón por texto largo, damos contexto */}
+              {isDesktop && !forceDisableSpeech && speechSupported && (text?.length || 0) > HIDE_MIC_THRESHOLD && (
+                <p className="mt-1 text-[11px] text-slate-400">
+                  (Ocultamos el botón de dictado por texto largo. Reduce contenido para volver a verlo.)
+                </p>
+              )}
             </div>
 
             <div className={isMobile ? "col-span-1" : "col-span-2"}>
@@ -322,18 +353,8 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
         </div>
 
         {/* footer */}
-        <div
-          className={
-            isMobile
-              ? "px-4 py-3 border-t border-slate-200 sticky bottom-0 bg-white z-10"
-              : "px-5 py-4 border-t border-slate-200"
-          }
-        >
-          <div
-            className={
-              isMobile ? "grid grid-cols-2 gap-2" : "flex justify-end gap-2"
-            }
-          >
+        <div className={isMobile ? "px-4 py-3 border-t border-slate-200 sticky bottom-0 bg-white z-10" : "px-5 py-4 border-t border-slate-200"}>
+          <div className={isMobile ? "grid grid-cols-2 gap-2" : "flex justify-end gap-2"}>
             <button
               type="button"
               onClick={handleClose}
