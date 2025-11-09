@@ -103,7 +103,8 @@ export default function Sidebar({
     if (!name) return;
     const trimmed = name.trim();
     if (!trimmed) return;
-    addUser({ name: trimmed, color: { h: 200, s: 80, v: 80 } });
+    // ✅ addUser espera un string (nombre). El color se asigna dentro de la store.
+    addUser(trimmed);
   };
 
   // Confirmación de borrado: cerrar al hacer click fuera / ESC
