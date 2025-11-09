@@ -3,17 +3,24 @@ import { persist } from "zustand/middleware";
 import { pushNoteChange, pushReplyChange } from "@/lib/sync";
 import { supabase, hasSupabase } from "@/lib/supabaseClient";
 
+// --- aplicar eventos remotos en caliente (realtime) ---
 applyRemoteHardDelete: (id) =>
-  set((state) => ({ notes: state.notes.filter((n) => n.id !== id) })),
+  set((state) => ({
+    notes: state.notes.filter((n) => n.id !== id),
+  })),
 
 applyRemoteSoftDelete: (id) =>
   set((state) => ({
-    notes: state.notes.map((n) => (n.id === id ? { ...n, deleted: true } : n)),
+    notes: state.notes.map((n) =>
+      n.id === id ? { ...n, deleted: true } : n
+    ),
   })),
 
 applyRemoteRestore: (id) =>
   set((state) => ({
-    notes: state.notes.map((n) => (n.id === id ? { ...n, deleted: false } : n)),
+    notes: state.notes.map((n) =>
+      n.id === id ? { ...n, deleted: false } : n
+    ),
   })),
 
 /* ===========================================================
