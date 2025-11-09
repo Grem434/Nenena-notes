@@ -86,7 +86,7 @@ export const useUsersStore = create(
         const u = { id: nanoid(), name, color, updated_at: now };
         set({ users: [...cur, u] });
         get()._syncEnabled && get().upsertRemote(name, color, now);
-      },,
+      },
     {
       name: "nenena-users",
       version: 3, // ⬅ bump versión de persistencia por el cambio de lógica (overwrite)
