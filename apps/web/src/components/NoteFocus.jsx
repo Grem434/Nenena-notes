@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from "react";
-import { Trash2, Undo2, Archive, CheckCircle2, Calendar, X, Mic, MicOff } from "lucide-react";
+import { Trash2, Undo2, Archive, CheckCircle2, Calendar, X, Mic } from "lucide-react";
 import { useNotesStore } from "@/store/useNotesStore";
 import { useUIStore } from "@/store/useUIStore";
 
@@ -38,7 +38,6 @@ export default function NoteFocus() {
   const { focusedNoteId, clearFocusedNote } = useUIStore();
   const {
     notes,
-    // acciones de notas
     deleteNote,
     restoreNote,
     hardRemove,
@@ -46,7 +45,7 @@ export default function NoteFocus() {
     unarchiveNote,
     toggleStatus,
     addReply,
-    updateNote, // usamos esto para dueAt
+    updateNote,
   } = useNotesStore((s) => ({
     notes: s.notes ?? [],
     deleteNote: s.deleteNote,
@@ -67,6 +66,7 @@ export default function NoteFocus() {
   const [replyText, setReplyText] = useState("");
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef(null);
+  const endSilenceTimer = useRef(null);
 
   if (!focusedNoteId || !note) return null;
 
@@ -122,8 +122,12 @@ export default function NoteFocus() {
     close();
   };
 
-  /* ====== dictado por voz (Web Speech API) ====== */
-  const toggleVoice = () => {
+  /* ====== dictado por voz auto-stop por silencio ======
+     - Pulsa una vez → empieza a escuchar.
+     - Al dejar de hablar, se detiene solo.
+     - Usa Web Speech API (Recognition), sin resultados intermedios.
+  ===================================================== */
+  const startVoiceOnce = () => {
     const SR =
       (typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition)) ||
       null;
@@ -133,6 +137,7 @@ export default function NoteFocus() {
       return;
     }
 
+    // Si ya está escuchando, permitimos cancelar manualmente con otro toque
     if (listening) {
       try {
         recognitionRef.current?.stop();
@@ -143,32 +148,53 @@ export default function NoteFocus() {
 
     const rec = new SR();
     recognitionRef.current = rec;
+    // Igual que en "nueva nota": sin continuo, y sin interinos → se corta por silencio
     rec.lang = "es-ES";
-    rec.continuous = true;
-    rec.interimResults = true;
+    rec.continuous = false;
+    rec.interimResults = false;
+
+    const stopSafely = () => {
+      try { rec.stop(); } catch {}
+    };
+
+    rec.onstart = () => {
+      setListening(true);
+      // por si algún motor no dispara onend al silencio, añadimos un “failsafe”
+      if (endSilenceTimer.current) clearTimeout(endSilenceTimer.current);
+      endSilenceTimer.current = setTimeout(stopSafely, 20000); // 20s máximo de escucha
+    };
 
     rec.onresult = (ev) => {
-      let finalChunk = "";
+      let finalText = "";
       for (let i = ev.resultIndex; i < ev.results.length; i++) {
         const res = ev.results[i];
-        const txt = res[0]?.transcript || "";
-        if (res.isFinal) finalChunk += txt + " ";
+        if (res.isFinal) finalText += (res[0]?.transcript || "") + " ";
       }
-      if (finalChunk) {
-        setReplyText((prev) => (prev ? prev + " " + finalChunk.trim() : finalChunk.trim()));
+      if (finalText) {
+        setReplyText((prev) => (prev ? `${prev} ${finalText.trim()}` : finalText.trim()));
       }
     };
+
+    rec.onspeechend = () => {
+      // se llama cuando deja de captar voz → paramos
+      stopSafely();
+    };
+
     rec.onerror = () => {
-      try { rec.stop(); } catch {}
+      stopSafely();
       setListening(false);
     };
+
     rec.onend = () => {
+      if (endSilenceTimer.current) {
+        clearTimeout(endSilenceTimer.current);
+        endSilenceTimer.current = null;
+      }
       setListening(false);
     };
 
     try {
       rec.start();
-      setListening(true);
     } catch {
       setListening(false);
     }
@@ -331,16 +357,16 @@ export default function NoteFocus() {
           </div>
         </div>
 
-        {/* Responder (con voz) */}
+        {/* Responder (voz auto-stop) */}
         <form onSubmit={handleAddReply} className="border-t border-slate-100 px-4 py-3 flex items-center gap-2">
           <button
             type="button"
-            onClick={toggleVoice}
-            className={`p-2 rounded-xl border ${listening ? "border-rose-300 text-rose-600" : "border-slate-200 text-slate-600"} hover:bg-slate-50`}
-            title={listening ? "Detener dictado" : "Dictar por voz"}
-            aria-label={listening ? "Detener dictado" : "Dictar por voz"}
+            onClick={startVoiceOnce}
+            className={`p-2 rounded-xl border ${listening ? "border-rose-300 text-rose-600 bg-rose-50" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+            title={listening ? "Escuchando… (se detiene al silencio)" : "Dictar por voz"}
+            aria-label={listening ? "Escuchando… (se detiene al silencio)" : "Dictar por voz"}
           >
-            {listening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            <Mic className="w-5 h-5" />
           </button>
 
           <input
