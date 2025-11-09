@@ -187,3 +187,24 @@ body{
 
 /* Header/Toolbar translúcidos */
 .dark .backdrop-blur-md{ background: rgba(17,24,39,.78) !important; } /* ~ slate-900/80 */
+
+/* ==== Selects legibles en modo oscuro (móvil y desktop) ==== */
+.dark select {
+  background-color: #0f172a !important; /* slate-900 */
+  color: #e5e7eb !important;            /* slate-200 */
+  border-color: #334155 !important;     /* slate-700 */
+}
+
+/* Muchos navegadores ignoran clases en <option>, así que forzamos aquí */
+.dark select option {
+  background-color: #111827 !important; /* slate-900/950 */
+  color: #e5e7eb !important;
+}
+
+/* Placeholders/selects deshabilitados */
+.dark select:disabled {
+  color: #94a3b8 !important;            /* slate-400 */
+  background-color: #0b1220 !important;
+  border-color: #334155 !important;
+}
+
