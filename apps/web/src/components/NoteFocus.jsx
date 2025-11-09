@@ -35,7 +35,6 @@ function dateInputToIso(yyyy_mm_dd) {
   if (!yyyy_mm_dd) return null;
   const [y, m, d] = yyyy_mm_dd.split("-").map(Number);
   if (!y || !m || !d) return null;
-  // fecha tope del día (sin hora visible en UI)
   const dt = new Date(y, m - 1, d, 23, 59, 59, 0);
   return dt.toISOString();
 }
@@ -54,7 +53,6 @@ function isIOSWebKit() {
   return isIOS && isWebKit;
 }
 
-/* ===== componente ===== */
 export default function NoteFocus() {
   const { focusedNoteId, clearFocusedNote } = useUIStore();
   const {
@@ -84,28 +82,52 @@ export default function NoteFocus() {
     [notes, focusedNoteId]
   );
 
-  // Texto editable
   const [textDraft, setTextDraft] = useState(note?.text ?? "");
-  const textRef = useRef(null);
-
-  // Respuesta
   const [replyText, setReplyText] = useState("");
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef(null);
   const endSilenceTimer = useRef(null);
 
   const speechSupported = hasSpeechRecognition();
-  const forceDisableSpeech = isIOSWebKit(); // iPhone/iPad: desactiva botón y muestra pista
+  const forceDisableSpeech = isIOSWebKit();
 
   useEffect(() => {
     setTextDraft(note?.text ?? "");
   }, [note?.id]);
 
+  // ESC cierra sin guardar
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        closeWithoutSave();
+      }
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, []);
+
   if (!focusedNoteId || !note) return null;
 
-  const close = () => {
+  const closeWithoutSave = () => {
+    // no persiste textDraft
+    stopMicIfAny();
     clearFocusedNote();
     setReplyText("");
+  };
+
+  const closeAfterSaveText = () => {
+    // guarda text y cierra
+    const next = (textDraft ?? "").replace(/\s+$/, "");
+    if (next !== (note.text ?? "")) {
+      updateNote(note.id, { text: next });
+    }
+    stopMicIfAny();
+    clearFocusedNote();
+    setReplyText("");
+  };
+
+  const stopMicIfAny = () => {
     try {
       if (recognitionRef.current && listening) recognitionRef.current.stop?.();
     } catch {}
@@ -116,7 +138,7 @@ export default function NoteFocus() {
   const handleSoftDelete = () => {
     if (!note.deleted) {
       deleteNote(note.id);
-      close();
+      closeWithoutSave();
     }
   };
   const handleArchive = () => {
@@ -131,37 +153,21 @@ export default function NoteFocus() {
   const dueInputValue = isoToDateInput(note.dueAt);
   const handleDueChange = (e) => {
     const iso = dateInputToIso(e.target.value);
-    updateNote(note.id, { dueAt: iso }); // null = sin fecha
+    updateNote(note.id, { dueAt: iso });
   };
-  const clearDue = () => {
-    updateNote(note.id, { dueAt: null });
-  };
+  const clearDue = () => updateNote(note.id, { dueAt: null });
 
-  /* ===== editar texto ===== */
-  const saveTextIfChanged = () => {
-    const next = (textDraft ?? "").replace(/\s+$/,""); // trim end suave
-    if (next !== (note.text ?? "")) {
-      updateNote(note.id, { text: next });
-    }
-  };
-  const handleTextKeyDown = (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      e.preventDefault();
-      textRef.current?.blur(); // onBlur guarda
-    }
-  };
-
-  /* ===== responder ===== */
+  /* ===== respuestas ===== */
   const handleAddReply = (e) => {
     e.preventDefault();
     const t = replyText.trim();
     if (!t) return;
     addReply(note.id, { author: note.from, text: t });
     setReplyText("");
-    close(); // cerrar tras enviar
+    closeWithoutSave(); // enviar respuesta cierra (sin tocar textDraft)
   };
 
-  /* ===== dictado: auto-stop por silencio ===== */
+  /* ===== dictado: auto-stop ===== */
   const startVoiceOnce = () => {
     const SR =
       (typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition)) ||
@@ -213,14 +219,14 @@ export default function NoteFocus() {
       return (
         <div className="flex items-center gap-2">
           <button
-            onClick={() => { restoreNote(note.id); close(); }}
+            onClick={() => { restoreNote(note.id); closeWithoutSave(); }}
             className="p-2 rounded-full hover:bg-slate-100 text-sky-700"
             title="Restaurar" aria-label="Restaurar"
           >
             <Undo2 className="w-5 h-5" />
           </button>
           <button
-            onClick={() => { hardRemove(note.id); close(); }}
+            onClick={() => { hardRemove(note.id); closeWithoutSave(); }}
             className="p-2 rounded-full hover:bg-slate-100 text-rose-700"
             title="Eliminar definitivamente" aria-label="Eliminar definitivamente"
           >
@@ -258,8 +264,8 @@ export default function NoteFocus() {
 
   return (
     <div className="fixed inset-0 z-[120]">
-      {/* backdrop (tocar fuera cierra) */}
-      <button className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={close} aria-label="Cerrar" />
+      {/* backdrop (tocar fuera cierra sin guardar) */}
+      <button className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={closeWithoutSave} aria-label="Cerrar" />
 
       <div className="absolute inset-x-0 md:inset-auto md:left-1/2 md:-translate-x-1/2 top-[8vh] md:top-[10vh] w-full md:w-[760px] bg-white rounded-2xl shadow-xl max-h-[84vh] overflow-hidden flex flex-col">
         {/* Header */}
@@ -282,7 +288,18 @@ export default function NoteFocus() {
               {note.deleted && <span className="ml-2 text-rose-500">· En papelera</span>}
             </div>
           </div>
-          <HeaderActions />
+
+          {/* Acciones + aspa cerrar sin guardar */}
+          <div className="flex items-center gap-1">
+            <HeaderActions />
+            <button
+              onClick={closeWithoutSave}
+              className="ml-1 p-2 rounded-full hover:bg-slate-100 text-slate-500"
+              title="Cerrar sin guardar" aria-label="Cerrar sin guardar"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Cuerpo */}
@@ -313,22 +330,16 @@ export default function NoteFocus() {
             )}
           </div>
 
-          {/* Texto editable de la nota */}
+          {/* Texto editable (sin guardar automático) */}
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1">Texto de la nota</label>
             <textarea
-              ref={textRef}
               value={textDraft}
               onChange={(e) => setTextDraft(e.target.value)}
-              onBlur={saveTextIfChanged}
-              onKeyDown={handleTextKeyDown}
               disabled={!!note.deleted}
               className="w-full min-h-[120px] rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-pink-200 disabled:opacity-60"
               placeholder="Escribe o edita la nota…"
             />
-            <p className="mt-1 text-[11px] text-slate-400">
-              Consejo: <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Enter</kbd> para guardar sin salir.
-            </p>
           </div>
 
           {/* Respuestas (con fecha sin hora) */}
@@ -351,47 +362,68 @@ export default function NoteFocus() {
           </div>
         </div>
 
-        {/* Responder (voz auto-stop o pista en iPhone) */}
-        <form onSubmit={handleAddReply} className="border-t border-slate-100 px-4 py-3 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={startVoiceOnce}
-            disabled={!speechSupported || forceDisableSpeech || !!note.deleted}
-            className={`p-2 rounded-xl border ${
-              listening ? "border-rose-300 text-rose-600 bg-rose-50" : "border-slate-200 text-slate-600 hover:bg-slate-50"
-            } disabled:opacity-50`}
-            title={
-              forceDisableSpeech
-                ? "En iPhone usa el micrófono del teclado para dictar"
-                : (!speechSupported ? "Dictado por voz no soportado en este navegador" : "Dictar por voz")
-            }
-            aria-label="Dictar por voz"
-          >
-            <Mic className="w-5 h-5" />
-          </button>
-
-          <input
-            value={replyText}
-            onChange={(e) => setReplyText(e.target.value)}
-            className="flex-1 border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-200"
-            placeholder={forceDisableSpeech ? "En iPhone usa el micrófono del teclado para dictar…" : "Responder…"}
-            disabled={!!note.deleted}
-          />
-
-          <button
-            type="submit"
-            disabled={!!note.deleted}
-            className="px-4 py-2 rounded-xl bg-pink-500 text-white text-sm hover:bg-pink-600 disabled:opacity-60"
-          >
-            Enviar
-          </button>
-        </form>
-
-        {forceDisableSpeech && !note.deleted && (
-          <div className="px-4 pb-3 text-[11px] text-slate-400">
-            💡 En iPhone: usa el micrófono del <strong>teclado</strong> para dictar y el texto entrará aquí.
+        {/* Footer: Guardar (si no está en papelera) + Responder */}
+        <div className="border-t border-slate-100">
+          {/* Barra guardar / cerrar */}
+          <div className="px-4 py-3 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={closeWithoutSave}
+              className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={closeAfterSaveText}
+              disabled={!!note.deleted}
+              className="px-4 py-2 rounded-xl bg-pink-500 text-white text-sm hover:bg-pink-600 disabled:opacity-60"
+            >
+              Guardar
+            </button>
           </div>
-        )}
+
+          {/* Responder */}
+          <form onSubmit={handleAddReply} className="px-4 pb-4 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={startVoiceOnce}
+              disabled={!speechSupported || forceDisableSpeech || !!note.deleted}
+              className={`p-2 rounded-xl border ${
+                listening ? "border-rose-300 text-rose-600 bg-rose-50" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+              } disabled:opacity-50`}
+              title={
+                forceDisableSpeech
+                  ? "En iPhone usa el micrófono del teclado para dictar"
+                  : (!speechSupported ? "Dictado por voz no soportado en este navegador" : "Dictar por voz")
+              }
+              aria-label="Dictar por voz"
+            >
+              <Mic className="w-5 h-5" />
+            </button>
+
+            <input
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              className="flex-1 border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-200"
+              placeholder={forceDisableSpeech ? "En iPhone usa el micrófono del teclado para dictar…" : "Responder…"}
+              disabled={!!note.deleted}
+            />
+            <button
+              type="submit"
+              disabled={!!note.deleted}
+              className="px-4 py-2 rounded-xl bg-slate-800 text-white text-sm hover:bg-slate-900 disabled:opacity-60"
+            >
+              Enviar
+            </button>
+          </form>
+
+          {forceDisableSpeech && !note.deleted && (
+            <div className="px-4 pb-3 text-[11px] text-slate-400">
+              💡 En iPhone: usa el micrófono del <strong>teclado</strong> para dictar y el texto entrará aquí.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
