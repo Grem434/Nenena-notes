@@ -21,23 +21,6 @@ import NoteSkeletons from "@/components/NoteSkeletons";
 import VirtualList from "@/components/VirtualList";
 import ShortcutsHelp from "@/components/ShortcutsHelp";
 import { startNotesRealtime } from "@/lib/notesRealtime";
-import { useNotesStore } from "@/store/useNotesStore";
-
-function App() {
-  const applyRemoteHardDelete = useNotesStore((s) => s.applyRemoteHardDelete);
-  const applyRemoteSoftDelete = useNotesStore((s) => s.applyRemoteSoftDelete);
-  const applyRemoteRestore = useNotesStore((s) => s.applyRemoteRestore);
-
-  useEffect(() => {
-    const stop = startNotesRealtime({
-      onHardDelete: (id) => applyRemoteHardDelete(id),
-      onSoftDelete: (id) => applyRemoteSoftDelete?.(id),
-      onRestore: (id) => applyRemoteRestore?.(id),
-    });
-    return () => stop?.();
-  }, [applyRemoteHardDelete, applyRemoteSoftDelete, applyRemoteRestore]);
-
-}
 
 const NoteFocusLazy = lazy(() => import("@/components/NoteFocus"));
 
@@ -121,13 +104,28 @@ export default function App() {
   const applyRemoteNote = useNotesStore((s) => s.applyRemoteNote);
   const applyRemoteNotes = useNotesStore((s) => s.applyRemoteNotes);
 
+  // hooks para aplicar eventos remotos (realtime)
+  const applyRemoteHardDelete = useNotesStore((s) => s.applyRemoteHardDelete);
+  const applyRemoteSoftDelete = useNotesStore((s) => s.applyRemoteSoftDelete);
+  const applyRemoteRestore = useNotesStore((s) => s.applyRemoteRestore);
+
   useUsersStore((s) => s.users ?? []);
   const isCompactView = useUIStore((s) => s.isCompactView);
   const toggleCompact = useUIStore((s) => s.toggleCompact);
   const setFocusedNote = useUIStore((s) => s.setFocusedNote);
   const cardTone = useStyleStore((s) => s.cardTone);
 
-    useEffect(() => {
+  // arrancar realtime para DELETE/UPDATE (papelera/restaurar y hard delete)
+  useEffect(() => {
+    const stop = startNotesRealtime({
+      onHardDelete: (id) => applyRemoteHardDelete?.(id),
+      onSoftDelete: (id) => applyRemoteSoftDelete?.(id),
+      onRestore: (id) => applyRemoteRestore?.(id),
+    });
+    return () => stop?.();
+  }, [applyRemoteHardDelete, applyRemoteSoftDelete, applyRemoteRestore]);
+
+  useEffect(() => {
     if (selectedRecipient && filter !== "todas") {
       setSelectedRecipient(null);
     }
@@ -206,9 +204,12 @@ export default function App() {
         }),
       (msg) => notify({ variant: "info", title: msg })
     );
+  }, [addNote]);
+
+  useEffect(() => {
     const t = setTimeout(() => setReady(true), 300);
     return () => clearTimeout(t);
-  }, [addNote]);
+  }, []);
 
   useEffect(() => {
     if (!authenticated) return;
