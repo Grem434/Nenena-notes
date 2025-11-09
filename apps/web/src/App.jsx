@@ -484,14 +484,16 @@ export default function App() {
         onOpenChange={setOpenUsers}
         onSelectInbound={(name) => {
           setSelectedPersonal(null);
-          setSelectedRecipient(name);
-          setFilter("todas");
-        }}
-        onSelectPersonal={(name) => {
-          setSelectedRecipient(null);
-          setSelectedPersonal(name);
-          setFilter("personales");
-        }}
+          if (name == null) {
+            // RESET destinatario → volver a generales
+            setSelectedRecipient(null);
+            setFilter("todas");
+          } else {
+            // Selección normal
+            setSelectedRecipient(name);
+            setFilter("todas");
+          }
+      }}
       />
 
       <ShortcutsHelp open={helpOpen} onOpenChange={setHelpOpen} />

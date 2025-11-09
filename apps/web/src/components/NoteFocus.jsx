@@ -1,115 +1,176 @@
 import React, { useState } from "react";
-import { X, Trash2, Archive, CheckCircle2 } from "lucide-react";
+import { Trash2, Undo2, Archive, CheckCircle2 } from "lucide-react";
 import { useNotesStore } from "@/store/useNotesStore";
 import { useUIStore } from "@/store/useUIStore";
 
+// Verificación de build
+console.log(
+  "[NoteFocus] build",
+  (import.meta && import.meta.env && import.meta.env.VITE_BUILD_ID) || "dev"
+);
+
+function formatShortDM(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  return `${dd}/${mm} ${hh}:${mi}`;
+}
+
 export default function NoteFocus() {
   const { focusedNoteId, clearFocusedNote } = useUIStore();
-  const notes = useNotesStore((s) => s.notes ?? []);
-  const deleteNote = useNotesStore((s) => s.deleteNote);
-  const archiveNote = useNotesStore((s) => s.archiveNote);
-  const unarchiveNote = useNotesStore((s) => s.unarchiveNote);
-  const toggleStatus = useNotesStore((s) => s.toggleStatus);
-  const addReply = useNotesStore((s) => s.addReply);
+  const {
+    notes,
+    deleteNote,
+    restoreNote,
+    hardRemove,
+    archiveNote,
+    unarchiveNote,
+    toggleStatus,
+    addReply,
+  } = useNotesStore((s) => ({
+    notes: s.notes ?? [],
+    deleteNote: s.deleteNote,
+    restoreNote: s.restoreNote,
+    hardRemove: s.hardRemove,
+    archiveNote: s.archiveNote,
+    unarchiveNote: s.unarchiveNote,
+    toggleStatus: s.toggleStatus,
+    addReply: s.addReply,
+  }));
 
   const note = notes.find((n) => n.id === focusedNoteId) || null;
   const [replyText, setReplyText] = useState("");
-
   if (!focusedNoteId || !note) return null;
 
-  const handleClose = () => {
+  const close = () => {
     clearFocusedNote();
     setReplyText("");
   };
 
-  const handleDelete = () => {
-    // Papelera siempre
-    deleteNote(note.id);
-    handleClose();
-  };
-
-  const handleArchive = () => {
-    if (note.archived) {
-      unarchiveNote(note.id);
-    } else {
-      archiveNote(note.id);
+  const handleSoftDelete = () => {
+    if (!note.deleted) {
+      deleteNote(note.id);
+      close();
     }
   };
-
+  const handleArchive = () => {
+    if (note.archived) unarchiveNote(note.id);
+    else archiveNote(note.id);
+  };
   const handleResolved = () => {
     toggleStatus(note.id);
   };
-
   const handleAddReply = (e) => {
     e.preventDefault();
-    const text = replyText.trim();
-    if (!text) return;
-    addReply(note.id, {
-      // seguimos usando el from de la nota como autor por ahora
-      author: note.from,
-      text,
-    });
+    const t = replyText.trim();
+    if (!t) return;
+    addReply(note.id, { author: note.from, text: t });
     setReplyText("");
   };
 
+  const HeaderActions = () => {
+    if (note.deleted) {
+      // 🔴 PAPELERA: SOLO Restaurar y Eliminar definitivamente
+      return (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              restoreNote(note.id);
+              close();
+            }}
+            className="p-2 rounded-full hover:bg-slate-100 text-sky-700"
+            title="Restaurar"
+            aria-label="Restaurar"
+          >
+            <Undo2 className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => {
+              hardRemove(note.id);
+              close();
+            }}
+            className="p-2 rounded-full hover:bg-slate-100 text-rose-700"
+            title="Eliminar definitivamente"
+            aria-label="Eliminar definitivamente"
+          >
+            <Trash2 className="w-5 h-5" />
+          </button>
+        </div>
+      );
+    }
+    // Estado normal (NO papelera)
+    return (
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleResolved}
+          className={`p-2 rounded-full hover:bg-slate-100 ${
+            note.status === "resuelta" ? "text-emerald-500" : "text-slate-500"
+          }`}
+          title="Marcar resuelta"
+          aria-label="Marcar resuelta"
+        >
+          <CheckCircle2 className="w-5 h-5" />
+        </button>
+        <button
+          onClick={handleArchive}
+          className="p-2 rounded-full hover:bg-slate-100 text-slate-500"
+          title={note.archived ? "Desarchivar" : "Archivar"}
+          aria-label={note.archived ? "Desarchivar" : "Archivar"}
+        >
+          <Archive className="w-5 h-5" />
+        </button>
+        <button
+          onClick={handleSoftDelete}
+          className="p-2 rounded-full hover:bg-slate-100 text-rose-500"
+          title="Mover a papelera"
+          aria-label="Mover a papelera"
+        >
+          <Trash2 className="w-5 h-5" />
+        </button>
+      </div>
+    );
+  };
+
   return (
-    <div className="fixed inset-0 z-[120] bg-black/30 flex items-center justify-center px-2 md:px-0">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-[120]">
+      <button
+        className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"
+        onClick={close}
+        aria-label="Cerrar"
+      />
+      <div className="absolute inset-x-0 md:inset-auto md:left-1/2 md:-translate-x-1/2 top-[8vh] md:top-[10vh] w-full md:w-[720px] bg-white rounded-2xl shadow-xl max-h-[84vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-          <div>
+          <div className="min-w-0">
             <p className="text-xs text-slate-400">
-              De <span className="text-slate-700">{note.from}</span> para{" "}
-              <span className="text-slate-700">{note.to}</span>
+              De <span className="text-slate-700">{note.from || "—"}</span> para{" "}
+              <span className="text-slate-700">{note.to || "—"}</span>
             </p>
-            <h2 className="text-lg font-semibold text-slate-800 mt-1">
-              Nota
-            </h2>
+            <div className="mt-1 text-[11px] text-slate-500">
+              <span className="mr-2">
+                Estado:{" "}
+                <strong className={note.status === "resuelta" ? "text-emerald-600" : "text-amber-700"}>
+                  {note.status || "pendiente"}
+                </strong>
+              </span>
+              <span className="mr-2">Creada: {formatShortDM(note.createdAt)}</span>
+              <span>Actualizada: {formatShortDM(note.updatedAt)}</span>
+              {note.archived && <span className="ml-2 text-slate-400">· Archivada</span>}
+              {note.deleted && <span className="ml-2 text-rose-500">· En papelera</span>}
+            </div>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleResolved}
-              className={`p-2 rounded-full hover:bg-slate-100 ${
-                note.status === "resuelta"
-                  ? "text-emerald-500"
-                  : "text-slate-500"
-              }`}
-              title="Marcar resuelta"
-            >
-              <CheckCircle2 className="w-5 h-5" />
-            </button>
-            <button
-              onClick={handleArchive}
-              className="p-2 rounded-full hover:bg-slate-100 text-slate-500"
-              title={note.archived ? "Desarchivar" : "Archivar"}
-            >
-              <Archive className="w-5 h-5" />
-            </button>
-            <button
-              onClick={handleDelete}
-              className="p-2 rounded-full hover:bg-slate-100 text-rose-500"
-              title="Mover a papelera"
-            >
-              <Trash2 className="w-5 h-5" />
-            </button>
-            <button
-              onClick={handleClose}
-              className="p-2 rounded-full hover:bg-slate-100 text-slate-500"
-              title="Cerrar"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+          <HeaderActions />
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           <p className="text-sm text-slate-700 whitespace-pre-line">
-            {note.text}
+            {note.text || <em className="text-slate-400">Sin texto…</em>}
           </p>
 
           <div>
-            <h3 className="text-xs font-semibold text-slate-500 mb-2">
-              Respuestas
-            </h3>
+            <h3 className="text-xs font-semibold text-slate-500 mb-2">Respuestas</h3>
             {Array.isArray(note.replies) && note.replies.length > 0 ? (
               <ul className="space-y-2">
                 {note.replies.map((r, idx) => (
@@ -117,9 +178,7 @@ export default function NoteFocus() {
                     key={r.id || r.createdAt || idx}
                     className="bg-slate-50 rounded-xl px-3 py-2 text-sm text-slate-700"
                   >
-                    <p className="text-[11px] text-slate-400 mb-1">
-                      {r.author || "—"}
-                    </p>
+                    <p className="text-[11px] text-slate-400 mb-0.5">{r.author || "—"}</p>
                     {r.text}
                   </li>
                 ))}
@@ -130,10 +189,7 @@ export default function NoteFocus() {
           </div>
         </div>
 
-        <form
-          onSubmit={handleAddReply}
-          className="border-t border-slate-100 px-5 py-3 flex gap-2"
-        >
+        <form onSubmit={handleAddReply} className="border-t border-slate-100 px-5 py-3 flex gap-2">
           <input
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}

@@ -49,10 +49,11 @@ export default function UsersSheetMobile({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[130] lg:hidden">
-      <div
+    <div className="fixed inset-0 z-[120]">
+      <button
         className="absolute inset-0 bg-slate-900/20 backdrop-blur-[2px]"
         onClick={() => onOpenChange?.(false)}
+        aria-label="Cerrar"
       />
       <div className="absolute inset-x-0 bottom-0 bg-white rounded-t-3xl shadow-xl max-h-[75vh] flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
@@ -60,10 +61,26 @@ export default function UsersSheetMobile({
           <button
             onClick={() => onOpenChange?.(false)}
             className="p-1.5 rounded-full hover:bg-slate-100"
+            aria-label="Cerrar"
           >
             <X className="w-5 h-5 text-slate-500" />
           </button>
         </div>
+
+        {/* 🔹 NUEVO: Botón para limpiar destinatario (volver a generales) */}
+        <div className="px-3 pt-3">
+          <button
+            type="button"
+            onClick={() => {
+              onSelectInbound?.(null);
+              onOpenChange?.(false);
+            }}
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50"
+          >
+            Ver todos
+          </button>
+        </div>
+
         <div className="overflow-y-auto py-3 px-3 space-y-2">
           {usersWithCounts.length === 0 ? (
             <p className="text-xs text-slate-400 px-1 py-2">
@@ -122,6 +139,7 @@ export default function UsersSheetMobile({
             })
           )}
         </div>
+
         <div className="px-4 pb-4 pt-1">
           <p className="text-[10px] text-slate-400">
             📨 de otros · 👤 personales
