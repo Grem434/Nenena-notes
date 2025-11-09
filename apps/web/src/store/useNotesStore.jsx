@@ -3,26 +3,6 @@ import { persist } from "zustand/middleware";
 import { pushNoteChange, pushReplyChange } from "@/lib/sync";
 import { supabase, hasSupabase } from "@/lib/supabaseClient";
 
-// --- aplicar eventos remotos en caliente (realtime) ---
-applyRemoteHardDelete: (id) =>
-  set((state) => ({
-    notes: state.notes.filter((n) => n.id !== id),
-  })),
-
-applyRemoteSoftDelete: (id) =>
-  set((state) => ({
-    notes: state.notes.map((n) =>
-      n.id === id ? { ...n, deleted: true } : n
-    ),
-  })),
-
-applyRemoteRestore: (id) =>
-  set((state) => ({
-    notes: state.notes.map((n) =>
-      n.id === id ? { ...n, deleted: false } : n
-    ),
-  })),
-
 /* ===========================================================
    SINGLETON GUARD — evita múltiples instancias de la store
    =========================================================== */
@@ -240,8 +220,8 @@ function createNotesStore() {
               const updated = { ...n, deleted: true, updatedAt: nowISO() };
               try { pushNoteChange("update", updated); } catch {}
               return updated;
-          });
-          return { notes };
+            });
+            return { notes };
           });
 
           // 2) Backend
@@ -261,15 +241,15 @@ function createNotesStore() {
         // Restaurar de papelera: local + broadcast "update" + persistir en Supabase
         restoreNote: async (id) => {
           // 1) Optimista en local + broadcast
-            set((state) => {
-              const notes = state.notes.map((n) => {
-                if (n.id !== id) return n;
-                const updated = { ...n, deleted: false, updatedAt: nowISO() };
-                try { pushNoteChange("update", updated); } catch {}
-                return updated;
-              });
-              return { notes };
+          set((state) => {
+            const notes = state.notes.map((n) => {
+              if (n.id !== id) return n;
+              const updated = { ...n, deleted: false, updatedAt: nowISO() };
+              try { pushNoteChange("update", updated); } catch {}
+              return updated;
             });
+            return { notes };
+          });
 
           // 2) Backend
           try {
@@ -283,19 +263,6 @@ function createNotesStore() {
             console.error("[restoreNote] backend:", e);
           }
         },
-
-        restoreNote: (id) =>
-          set((state) => {
-            const notes = state.notes.map((n) => {
-              if (n.id !== id) return n;
-              const updated = { ...n, deleted: false, updatedAt: nowISO() };
-              try {
-                pushNoteChange("update", updated);
-              } catch {}
-              return updated;
-            });
-            return { notes };
-          }),
 
         /* ---------- Borrado DEFINITIVO (papelera) ---------- */
         // Eliminar definitivamente: quita de la store + borra en backend + avisa por sync
@@ -316,7 +283,27 @@ function createNotesStore() {
             console.error("[hardRemove] fallo al borrar en backend:", e);
             // Nota: si quieres, aquí podríamos reponer la nota desde cache si falla.
           }
-        }, 
+        },
+
+        // --- aplicar eventos remotos en caliente (Realtime / Sync) ---
+        applyRemoteHardDelete: (id) =>
+          set((state) => ({
+            notes: state.notes.filter((n) => n.id !== id),
+          })),
+
+        applyRemoteSoftDelete: (id) =>
+          set((state) => ({
+            notes: state.notes.map((n) =>
+              n.id === id ? { ...n, deleted: true } : n
+            ),
+          })),
+
+        applyRemoteRestore: (id) =>
+          set((state) => ({
+            notes: state.notes.map((n) =>
+              n.id === id ? { ...n, deleted: false } : n
+            ),
+          })),
 
         /* ---------- Merge remoto seguro ---------- */
         applyRemoteNote: (row, eventType = "INSERT") =>
