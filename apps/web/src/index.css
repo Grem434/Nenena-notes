@@ -123,22 +123,67 @@ body{
   box-sizing:border-box !important;
 }
 
-/* ==== Dark mode (clase .dark en <html>) ================================== */
-.dark body{
-  @apply bg-slate-900 text-slate-100;
+/* ==== Dark mode (alto contraste y lectura cómoda) ======================== */
+/* Paleta por variables: más luz en superficies, texto más claro */
+:root{
+  --nn-bg: #0b1220;           /* fondo app (≈ slate-950, pero algo más cálido) */
+  --nn-surface: #1f2937;      /* superficie tarjetas/paneles (≈ slate-800) */
+  --nn-surface-2: #111827;    /* superficies profundas (≈ slate-900) */
+  --nn-border: #334155;       /* borde (≈ slate-700) */
+  --nn-text: #e5e7eb;         /* texto principal (≈ slate-200) */
+  --nn-text-muted: #a5b4fc;   /* matiz sutil (lavanda leve para contraste) */
+  --nn-muted: #94a3b8;        /* texto secundario (slate-400) */
 }
 
-/* selección en dark */
-.dark ::selection{background:color-mix(in oklab, var(--nenena-brand) 30%, black); color:#F8FAFC}
-.dark ::-moz-selection{background:color-mix(in oklab, var(--nenena-brand) 30%, black); color:#F8FAFC}
+.dark body { background: var(--nn-bg); color: var(--nn-text); }
 
-/* scrollbar en dark (webkit) */
-.dark ::-webkit-scrollbar-thumb{background:#334155}
-.dark ::-webkit-scrollbar-track{background:#0f172a}
+/* Scrollbar */
+.dark ::-webkit-scrollbar-thumb{background:#475569}
+.dark ::-webkit-scrollbar-track{background:#0b1220}
 
-/* bordes y fondos básicos que usamos mucho */
-.dark .bg-white{ background-color: rgb(15 23 42 / 1) !important; }          /* slate-900 */
-.dark .text-slate-700{ color: rgb(203 213 225 / 1) !important; }            /* slate-300 */
-.dark .border-slate-200{ border-color: rgb(71 85 105 / 1) !important; }     /* slate-600 */
-.dark .hover\:bg-slate-50:hover{ background-color: rgb(30 41 59 / 1) !important; } /* slate-800 */
-.dark .placeholder\:text-slate-400::placeholder{ color: rgb(148 163 184 / 1) !important; }
+/* Selección */
+.dark ::selection{ background:#334155; color:#f8fafc }
+.dark ::-moz-selection{ background:#334155; color:#f8fafc }
+
+/* Superficies comunes: subimos un punto la luminosidad frente al fondo */
+.dark .bg-white{ background-color: var(--nn-surface) !important; }
+.dark .bg-slate-50{ background-color: #1b2533 !important; }
+.dark .bg-slate-100{ background-color: #1b2533 !important; }
+.dark .shadow, .dark .shadow-lg, .dark .shadow-xl{ box-shadow: 0 8px 30px rgba(0,0,0,.35) !important; }
+
+/* Bordes y separadores */
+.dark .border-slate-100,
+.dark .border-slate-200 { border-color: var(--nn-border) !important; }
+
+/* Texto */
+.dark .text-slate-700,
+.dark .text-slate-800 { color: var(--nn-text) !important; }
+.dark .text-slate-600,
+.dark .text-slate-500,
+.dark .text-slate-400 { color: var(--nn-muted) !important; }
+.dark .placeholder\:text-slate-400::placeholder { color: #9aa7b5 !important; }
+
+/* Inputs y textareas */
+.dark input[type="text"],
+.dark input[type="search"],
+.dark input[type="date"],
+.dark input[type="email"],
+.dark textarea {
+  background: var(--nn-surface-2) !important;
+  color: var(--nn-text) !important;
+  border-color: var(--nn-border) !important;
+}
+.dark input:focus,
+.dark textarea:focus {
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(236,72,153,.3); /* rosa marca corporativa */
+  border-color: rgba(236,72,153,.5) !important;
+}
+
+/* Badges/etiquetas muy oscuras — acláralas un poco */
+.dark .badge,
+.dark .tag,
+.dark .rounded-full.bg-slate-900 { background: #273244 !important; color: var(--nn-text); }
+
+/* Header/Toolbar translúcidos */
+.dark .backdrop-blur-md{ background: rgba(17,24,39,.78) !important; } /* ~ slate-900/80 */
