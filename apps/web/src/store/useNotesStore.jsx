@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { pushNoteChange, pushReplyChange } from "@/lib/sync";
+import { supabase, hasSupabase } from "@/lib/supabaseClient";
 
 /* ===========================================================
    SINGLETON GUARD — evita múltiples instancias de la store
@@ -210,19 +211,58 @@ function createNotesStore() {
             return { notes };
           }),
 
-        // 👇 aquí ya estabas haciendo borrado suave. Lo dejamos así.
-        deleteNote: (id) =>
+        // Mover a papelera (soft delete): local + broadcast "update" + persistir en Supabase
+        deleteNote: async (id) => {
+          // 1) Optimista en local + broadcast (manteniendo tu firma actual)
           set((state) => {
             const notes = state.notes.map((n) => {
               if (n.id !== id) return n;
               const updated = { ...n, deleted: true, updatedAt: nowISO() };
-              try {
-                pushNoteChange("update", updated);
-              } catch {}
+              try { pushNoteChange("update", updated); } catch {}
               return updated;
+          });
+          return { notes };
+          });
+
+          // 2) Backend
+          try {
+            if (hasSupabase && supabase) {
+              const { error } = await supabase.from("notes")
+                .update({ deleted: true })
+                .eq("id", id);
+              if (error) throw error;
+            }
+          } catch (e) {
+            console.error("[deleteNote] backend:", e);
+            // si quisieras, aquí podrías revertir el cambio local en caso de error
+          }
+        },
+
+        // Restaurar de papelera: local + broadcast "update" + persistir en Supabase
+        restoreNote: async (id) => {
+          // 1) Optimista en local + broadcast
+            set((state) => {
+              const notes = state.notes.map((n) => {
+                if (n.id !== id) return n;
+                const updated = { ...n, deleted: false, updatedAt: nowISO() };
+                try { pushNoteChange("update", updated); } catch {}
+                return updated;
+              });
+              return { notes };
             });
-            return { notes };
-          }),
+
+          // 2) Backend
+          try {
+            if (hasSupabase && supabase) {
+              const { error } = await supabase.from("notes")
+                .update({ deleted: false })
+                .eq("id", id);
+              if (error) throw error;
+            }
+          } catch (e) {
+            console.error("[restoreNote] backend:", e);
+          }
+        },
 
         restoreNote: (id) =>
           set((state) => {
@@ -238,12 +278,27 @@ function createNotesStore() {
           }),
 
         /* ---------- Borrado DEFINITIVO (papelera) ---------- */
-        hardRemove: (id) => {
-          try {
-            pushNoteChange("delete", { id });
-          } catch {}
+        // Eliminar definitivamente: quita de la store + borra en backend + avisa por sync
+        hardRemove: async (id) => {
+          // 1) Optimista en local
           set((state) => ({ notes: state.notes.filter((n) => n.id !== id) }));
-        },
+
+          // 2) Aviso de sync a otros clientes (si tienes canal)
+          try {
+            pushNoteChange({ id, op: "hard_delete" });
+          } catch {}
+
+          // 3) Backend (Supabase) si está configurado
+          try {
+            if (hasSupabase && supabase) {
+              const { error } = await supabase.from("notes").delete().eq("id", id);
+              if (error) throw error;
+            }
+          } catch (e) {
+            console.error("[hardRemove] fallo al borrar en backend:", e);
+            // Nota: si quieres, aquí podríamos reponer la nota desde cache si falla.
+          }
+        }, 
 
         /* ---------- Merge remoto seguro ---------- */
         applyRemoteNote: (row, eventType = "INSERT") =>
