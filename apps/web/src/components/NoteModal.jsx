@@ -38,7 +38,7 @@ function isIOSWebKit() {
 
 export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
   const users = useUsersStore((s) => s.users || []);
-  const addNote = useNotesStore((s) => s.addNote);
+  // ❗ Quitamos addNote para evitar doble inserción. Usamos onSave para inserciones.
   const updateNote = useNotesStore((s) => s.updateNote);
 
   const [from, setFrom] = useState("");
@@ -76,14 +76,15 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
       setText(editingNote.text || "");
       setDueDate(toDateInputValue(editingNote.dueAt));
     } else {
-      setFrom("");
-      setTo("");
+      // Para nueva nota, iniciamos vacíos (o podrías precargar usuario actual si tienes esa info)
+      setFrom((prev) => prev || "");
+      setTo((prev) => prev || "");
       setText("");
       setDueDate("");
     }
     // al abrir, reiniciamos dictado
     setListening(false);
-  }, [editingNote, open]); // mantiene tu comportamiento original. :contentReference[oaicite:1]{index=1}
+  }, [editingNote, open]);
 
   // foco inicial
   useEffect(() => {
@@ -92,7 +93,7 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
     }
   }, [open]);
 
-  // preparar SpeechRecognition cuando abra el modal (igual que tenías)
+  // preparar SpeechRecognition cuando abra el modal
   useEffect(() => {
     if (!open) return;
     const SpeechRecognition =
@@ -106,8 +107,8 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
 
     const rec = new SpeechRecognition();
     rec.lang = "es-ES";
-    rec.continuous = false;     // auto-stop por silencio (idéntico a tu enfoque actual). :contentReference[oaicite:2]{index=2}
-    rec.interimResults = false; // sin resultados interinos. :contentReference[oaicite:3]{index=3}
+    rec.continuous = false;     // auto-stop por silencio
+    rec.interimResults = false; // sin resultados interinos
 
     rec.onresult = (event) => {
       const transcript = event.results[0][0].transcript;
@@ -133,7 +134,7 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
 
   const handleClose = () => onOpenChange?.(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (submitting) return;
 
@@ -151,16 +152,21 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
 
     try {
       if (isEditing) {
-        updateNote(editingNote.id, payload);
+        await updateNote(editingNote.id, payload);
         notify({ variant: "success", title: "Nota actualizada" });
       } else {
-        addNote(payload);
+        // 👇 Inserción única vía onSave (App.jsx se encarga de addNote/persistir)
+        await onSave?.({ ...payload, archived: false });
         notify({ variant: "success", title: "Nota creada" });
-        onSave?.(payload);
       }
       handleClose();
     } finally {
       setSubmitting(false);
+      // Mantener from/to tras crear por comodidad. Si prefieres limpiar, descomenta:
+      // setFrom("");
+      // setTo("");
+      // setText("");
+      // setDueDate("");
     }
   };
 
