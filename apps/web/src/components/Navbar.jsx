@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Plus, LayoutGrid, List, Volume2, VolumeX, Users, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSoundStore } from "@/store/useSoundStore";
+import ThemeToggle from "@/components/ThemeToggle";
 
 function usePortalPosition(anchorRef, open) {
   const [pos, setPos] = useState({ top: 0, left: 0, width: 220 });
@@ -219,6 +220,9 @@ export default function Navbar({
         >
           <ToggleIcon size={18} aria-hidden="true" />
         </button>
+
+        {/* Conmutador de tema (solo desktop) */}
+        <ThemeToggle />
 
         {/* Sonido */}
         <button

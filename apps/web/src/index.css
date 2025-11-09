@@ -122,3 +122,23 @@ body{
   flex:0 0 auto !important;
   box-sizing:border-box !important;
 }
+
+/* ==== Dark mode (clase .dark en <html>) ================================== */
+.dark body{
+  @apply bg-slate-900 text-slate-100;
+}
+
+/* selección en dark */
+.dark ::selection{background:color-mix(in oklab, var(--nenena-brand) 30%, black); color:#F8FAFC}
+.dark ::-moz-selection{background:color-mix(in oklab, var(--nenena-brand) 30%, black); color:#F8FAFC}
+
+/* scrollbar en dark (webkit) */
+.dark ::-webkit-scrollbar-thumb{background:#334155}
+.dark ::-webkit-scrollbar-track{background:#0f172a}
+
+/* bordes y fondos básicos que usamos mucho */
+.dark .bg-white{ background-color: rgb(15 23 42 / 1) !important; }          /* slate-900 */
+.dark .text-slate-700{ color: rgb(203 213 225 / 1) !important; }            /* slate-300 */
+.dark .border-slate-200{ border-color: rgb(71 85 105 / 1) !important; }     /* slate-600 */
+.dark .hover\:bg-slate-50:hover{ background-color: rgb(30 41 59 / 1) !important; } /* slate-800 */
+.dark .placeholder\:text-slate-400::placeholder{ color: rgb(148 163 184 / 1) !important; }
