@@ -261,16 +261,59 @@ export default function App() {
       list = notes.filter((n) => n.to === selectedRecipient && !n.deleted && !n.archived && !isPersonal(n));
     } else {
       switch (filter) {
-        case "todas": list = notes.filter((n) => !n.archived && !n.deleted && !isPersonal(n)); break;
-        case "pendiente": list = notes.filter((n) => n.status === "pendiente" && !n.archived && !n.deleted && !isPersonal(n)); break;
-        case "resuelta": list = notes.filter((n) => n.status === "resuelta" && !n.archived && !n.deleted && !isPersonal(n)); break;
-        case "archivadas": list = notes.filter((n) => n.archived && !n.deleted && !isPersonal(n)); break;
-        case "personales":
-          if (selectedPersonal) list = notes.filter((n) => n.from === selectedPersonal && n.to === selectedPersonal && !n.archived && !n.deleted);
-          break;
-        case "papelera": list = notes.filter((n) => n.deleted && !isPersonal(n)); break;
-        default: list = notes.filter((n) => !n.archived && !n.deleted && !isPersonal(n));
-      }
+  case "todas":
+    list = notes.filter(
+      (n) => !n.archived && !n.deleted && !isPersonal(n)
+    );
+    break;
+
+  case "pendiente":
+    list = notes.filter(
+      (n) =>
+        n.status === "pendiente" &&
+        !n.archived &&
+        !n.deleted &&
+        !isPersonal(n)
+    );
+    break;
+
+  case "resuelta":
+    list = notes.filter(
+      (n) =>
+        n.status === "resuelta" &&
+        !n.archived &&
+        !n.deleted &&
+        !isPersonal(n)
+    );
+    break;
+
+  case "archivadas":
+    list = notes.filter(
+      (n) => n.archived && !n.deleted && !isPersonal(n)
+    );
+    break;
+
+  case "personales":
+    if (selectedPersonal)
+      list = notes.filter(
+        (n) =>
+          n.from === selectedPersonal &&
+          n.to === selectedPersonal &&
+          !n.archived &&
+          !n.deleted
+      );
+    break;
+
+  case "papelera":
+    // 👇 aquí el cambio importante: muestra TODAS las borradas
+    list = notes.filter((n) => n.deleted);
+    break;
+
+  default:
+    list = notes.filter(
+      (n) => !n.archived && !n.deleted && !isPersonal(n)
+    );
+}
     }
     if (debouncedSearch.trim()) {
       const term = debouncedSearch.toLowerCase();
