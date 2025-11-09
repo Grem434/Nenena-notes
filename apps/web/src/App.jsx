@@ -109,6 +109,12 @@ export default function App() {
   const setFocusedNote = useUIStore((s) => s.setFocusedNote);
   const cardTone = useStyleStore((s) => s.cardTone);
 
+    useEffect(() => {
+    if (selectedRecipient && filter !== "todas") {
+      setSelectedRecipient(null);
+    }
+  }, [filter, selectedRecipient]);
+
   // ✅ Invalida caché local cuando cambia el build (sin romper el arranque)
   useEffect(() => {
     (async () => {

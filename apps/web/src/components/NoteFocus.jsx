@@ -1,27 +1,39 @@
 import React, { useState } from "react";
 import { X, Trash2, Archive, CheckCircle2 } from "lucide-react";
 import { useNotesStore } from "@/store/useNotesStore";
+import { useUIStore } from "@/store/useUIStore";
 
-export default function NoteFocus({ note, onClose }) {
+export default function NoteFocus() {
+  const { focusedNoteId, clearFocusedNote } = useUIStore();
+  const notes = useNotesStore((s) => s.notes ?? []);
   const deleteNote = useNotesStore((s) => s.deleteNote);
-  const toggleArchive = useNotesStore((s) => s.archiveNote);
-  const toggleUnarchive = useNotesStore((s) => s.unarchiveNote);
+  const archiveNote = useNotesStore((s) => s.archiveNote);
+  const unarchiveNote = useNotesStore((s) => s.unarchiveNote);
   const toggleStatus = useNotesStore((s) => s.toggleStatus);
   const addReply = useNotesStore((s) => s.addReply);
 
+  const note = notes.find((n) => n.id === focusedNoteId) || null;
   const [replyText, setReplyText] = useState("");
 
-  if (!note) return null;
+  if (!focusedNoteId || !note) return null;
+
+  const handleClose = () => {
+    clearFocusedNote();
+    setReplyText("");
+  };
 
   const handleDelete = () => {
-    // 👇 papelera siempre
+    // Papelera siempre
     deleteNote(note.id);
-    onClose?.();
+    handleClose();
   };
 
   const handleArchive = () => {
-    if (note.archived) toggleUnarchive(note.id);
-    else toggleArchive(note.id);
+    if (note.archived) {
+      unarchiveNote(note.id);
+    } else {
+      archiveNote(note.id);
+    }
   };
 
   const handleResolved = () => {
@@ -33,6 +45,7 @@ export default function NoteFocus({ note, onClose }) {
     const text = replyText.trim();
     if (!text) return;
     addReply(note.id, {
+      // seguimos usando el from de la nota como autor por ahora
       author: note.from,
       text,
     });
@@ -40,7 +53,7 @@ export default function NoteFocus({ note, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[120] bg-black/30 flex items-center justify-center">
+    <div className="fixed inset-0 z-[120] bg-black/30 flex items-center justify-center px-2 md:px-0">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
           <div>
@@ -56,7 +69,9 @@ export default function NoteFocus({ note, onClose }) {
             <button
               onClick={handleResolved}
               className={`p-2 rounded-full hover:bg-slate-100 ${
-                note.status === "resuelta" ? "text-emerald-500" : "text-slate-500"
+                note.status === "resuelta"
+                  ? "text-emerald-500"
+                  : "text-slate-500"
               }`}
               title="Marcar resuelta"
             >
@@ -77,7 +92,7 @@ export default function NoteFocus({ note, onClose }) {
               <Trash2 className="w-5 h-5" />
             </button>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="p-2 rounded-full hover:bg-slate-100 text-slate-500"
               title="Cerrar"
             >
@@ -97,11 +112,14 @@ export default function NoteFocus({ note, onClose }) {
             </h3>
             {Array.isArray(note.replies) && note.replies.length > 0 ? (
               <ul className="space-y-2">
-                {note.replies.map((r) => (
+                {note.replies.map((r, idx) => (
                   <li
-                    key={r.id || r.createdAt}
+                    key={r.id || r.createdAt || idx}
                     className="bg-slate-50 rounded-xl px-3 py-2 text-sm text-slate-700"
                   >
+                    <p className="text-[11px] text-slate-400 mb-1">
+                      {r.author || "—"}
+                    </p>
                     {r.text}
                   </li>
                 ))}
