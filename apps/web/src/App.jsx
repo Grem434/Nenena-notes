@@ -20,6 +20,24 @@ import { pullAllNotes, startNotesSync, stopNotesSync } from "@/lib/sync";
 import NoteSkeletons from "@/components/NoteSkeletons";
 import VirtualList from "@/components/VirtualList";
 import ShortcutsHelp from "@/components/ShortcutsHelp";
+import { startNotesRealtime } from "@/lib/notesRealtime";
+import { useNotesStore } from "@/store/useNotesStore";
+
+function App() {
+  const applyRemoteHardDelete = useNotesStore((s) => s.applyRemoteHardDelete);
+  const applyRemoteSoftDelete = useNotesStore((s) => s.applyRemoteSoftDelete);
+  const applyRemoteRestore = useNotesStore((s) => s.applyRemoteRestore);
+
+  useEffect(() => {
+    const stop = startNotesRealtime({
+      onHardDelete: (id) => applyRemoteHardDelete(id),
+      onSoftDelete: (id) => applyRemoteSoftDelete?.(id),
+      onRestore: (id) => applyRemoteRestore?.(id),
+    });
+    return () => stop?.();
+  }, [applyRemoteHardDelete, applyRemoteSoftDelete, applyRemoteRestore]);
+
+}
 
 const NoteFocusLazy = lazy(() => import("@/components/NoteFocus"));
 

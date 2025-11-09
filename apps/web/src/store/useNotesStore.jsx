@@ -3,6 +3,19 @@ import { persist } from "zustand/middleware";
 import { pushNoteChange, pushReplyChange } from "@/lib/sync";
 import { supabase, hasSupabase } from "@/lib/supabaseClient";
 
+applyRemoteHardDelete: (id) =>
+  set((state) => ({ notes: state.notes.filter((n) => n.id !== id) })),
+
+applyRemoteSoftDelete: (id) =>
+  set((state) => ({
+    notes: state.notes.map((n) => (n.id === id ? { ...n, deleted: true } : n)),
+  })),
+
+applyRemoteRestore: (id) =>
+  set((state) => ({
+    notes: state.notes.map((n) => (n.id === id ? { ...n, deleted: false } : n)),
+  })),
+
 /* ===========================================================
    SINGLETON GUARD — evita múltiples instancias de la store
    =========================================================== */
@@ -284,9 +297,7 @@ function createNotesStore() {
           set((state) => ({ notes: state.notes.filter((n) => n.id !== id) }));
 
           // 2) Aviso de sync a otros clientes (si tienes canal)
-          try {
-            pushNoteChange({ id, op: "hard_delete" });
-          } catch {}
+          try { pushNoteChange("hard_delete", { id }); } catch {}
 
           // 3) Backend (Supabase) si está configurado
           try {
