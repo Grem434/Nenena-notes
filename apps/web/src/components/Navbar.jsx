@@ -163,7 +163,7 @@ export default function Navbar({
 
   return (
     <header
-      className="sticky top-0 z-40 bg-white/85 backdrop-blur-md border-b border-slate-100"
+      className="sticky top-0 z-40 bg-white/85 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-100 dark:border-slate-800"
       style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
     >
       <div className="max-w-7xl mx-auto w-full px-4 py-2.5 flex items-center gap-2">
@@ -178,9 +178,11 @@ export default function Navbar({
             title="Buscar (atajo: F)"
             aria-keyshortcuts="F"
             className={cn(
-              "w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2",
-              "text-sm text-slate-700 placeholder:text-slate-400",
-              "focus:outline-none focus:ring-2 focus:ring-pink-200 focus:border-pink-300 transition"
+              "w-full rounded-xl border px-3 py-2 text-sm transition",
+              "border-slate-200 bg-white/80 text-slate-700 placeholder:text-slate-400",
+              "focus:outline-none focus:ring-2 focus:ring-pink-200 focus:border-pink-300",
+              "dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:placeholder:text-slate-400",
+              "dark:focus:ring-pink-300 dark:focus:border-pink-400"
             )}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -215,7 +217,8 @@ export default function Navbar({
           aria-label={toggleTitle}
           className={cn(
             "h-9 w-9 grid place-items-center rounded-lg border transition",
-            "border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
+            "border-slate-200 bg-white hover:bg-slate-50 text-slate-700",
+            "dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200"
           )}
         >
           <ToggleIcon size={18} aria-hidden="true" />
@@ -233,7 +236,8 @@ export default function Navbar({
           className={cn(
             "h-9 w-9 grid place-items-center rounded-lg border transition",
             "border-slate-200 bg-white hover:bg-slate-50",
-            effectiveMuted ? "text-slate-400" : "text-slate-700"
+            effectiveMuted ? "text-slate-400" : "text-slate-700",
+            "dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200"
           )}
         >
           <SoundIcon size={18} aria-hidden="true" />
@@ -247,7 +251,7 @@ export default function Navbar({
               role="dialog"
               aria-modal="true"
               aria-label="Ajustes de volumen"
-              className="fixed z-50 rounded-xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.08)] p-3"
+              className="fixed z-50 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-[0_8px_30px_rgba(0,0,0,0.08)] p-3"
               style={{
                 top: pos.top, left: pos.left, width: pos.width,
                 maxHeight: "calc(100dvh - 16px)", overflow: "auto",
@@ -257,8 +261,8 @@ export default function Navbar({
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[12px] text-slate-600">Volumen</span>
-                <span className="text-[12px] font-medium text-slate-700">
+                <span className="text-[12px] text-slate-600 dark:text-slate-300">Volumen</span>
+                <span className="text-[12px] font-medium text-slate-700 dark:text-slate-200">
                   {Math.round(Number(volume || 0) * 100)}%
                 </span>
               </div>
@@ -309,7 +313,7 @@ export default function Navbar({
                       }
                     }
                   }}
-                  className="text-[12px] text-slate-500 hover:text-slate-700 underline"
+                  className="text-[12px] text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 underline"
                   title={effectiveMuted ? "Quitar silencio" : "Silenciar"}
                 >
                   {effectiveMuted ? "Quitar silencio" : "Silenciar"}
@@ -323,9 +327,8 @@ export default function Navbar({
         <button
           onClick={onNew}
           className={cn(
-            "hidden sm:inline-flex items-center gap-2 rounded-xl border px-3 h-9",
-            "text-sm font-medium",
-            "bg-pink-500 text-white border-pink-500 hover:bg-pink-600 transition"
+            "hidden sm:inline-flex items-center gap-2 rounded-xl border px-3 h-9 text-sm font-medium transition",
+            "bg-pink-500 text-white border-pink-500 hover:bg-pink-600"
           )}
           title="Nueva nota (atajo: N)"
           aria-label="Nueva nota"
@@ -339,9 +342,8 @@ export default function Navbar({
         <button
           onClick={onNew}
           className={cn(
-            "sm:hidden h-9 w-9 grid place-items-center rounded-lg border",
-            "text-sm font-medium",
-            "bg-pink-500 text-white border-pink-500 hover:bg-pink-600 transition"
+            "sm:hidden h-9 w-9 grid place-items-center rounded-lg border text-sm font-medium transition",
+            "bg-pink-500 text-white border-pink-500 hover:bg-pink-600"
           )}
           title="Nueva nota (atajo: N)"
           aria-label="Nueva nota"
