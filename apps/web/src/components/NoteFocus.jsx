@@ -14,6 +14,16 @@ function formatShortDM(iso) {
   return `${dd}/${mm} ${hh}:${mi}`;
 }
 
+function formatDateOnly(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
 function isoToDateInput(iso) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -28,7 +38,7 @@ function dateInputToIso(yyyy_mm_dd) {
   if (!yyyy_mm_dd) return null;
   const [y, m, d] = yyyy_mm_dd.split("-").map(Number);
   if (!y || !m || !d) return null;
-  // Guardamos a las 23:59:59 en local para “fecha tope” del día.
+  // fecha tope del día (sin hora visible en UI)
   const dt = new Date(y, m - 1, d, 23, 59, 59, 0);
   return dt.toISOString();
 }
@@ -42,7 +52,6 @@ function hasSpeechRecognition() {
 
 function isIOSWebKit() {
   if (typeof navigator === "undefined") return false;
-  // Cubre Safari y cualquier navegador en iOS (todos usan WebKit)
   const ua = navigator.userAgent || "";
   const isIOS = /iPad|iPhone|iPod/.test(ua);
   const isWebKit = /WebKit/.test(ua);
@@ -85,14 +94,13 @@ export default function NoteFocus() {
   const endSilenceTimer = useRef(null);
 
   const speechSupported = hasSpeechRecognition();
-  const forceDisableSpeech = isIOSWebKit(); // en iPhone/iPad desactivamos botón
+  const forceDisableSpeech = isIOSWebKit(); // iPhone/iPad: desactiva botón y muestra pista
 
   if (!focusedNoteId || !note) return null;
 
   const close = () => {
     clearFocusedNote();
     setReplyText("");
-    // parar mic si estuviera activo
     try {
       if (recognitionRef.current && listening) {
         recognitionRef.current.stop?.();
@@ -118,7 +126,7 @@ export default function NoteFocus() {
     toggleStatus(note.id);
   };
 
-  /* ====== dueAt (fecha tope de resolución) ====== */
+  /* ====== dueAt (fecha tope) ====== */
   const dueInputValue = isoToDateInput(note.dueAt);
 
   const handleDueChange = (e) => {
@@ -137,22 +145,17 @@ export default function NoteFocus() {
     if (!t) return;
     addReply(note.id, { author: note.from, text: t });
     setReplyText("");
-    // cerrar tras enviar (requisito)
-    close();
+    close(); // cerrar tras enviar
   };
 
-  /* ====== dictado por voz auto-stop por silencio ====== */
+  /* ====== dictado voz: auto-stop por silencio ====== */
   const startVoiceOnce = () => {
     const SR =
       (typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition)) ||
       null;
 
-    if (!SR) {
-      // No soportado (Android Firefox / iOS en general, etc.)
-      return;
-    }
+    if (!SR) return;
 
-    // Si ya está escuchando, permitimos cancelar manualmente con otro toque
     if (listening) {
       try {
         recognitionRef.current?.stop();
@@ -164,8 +167,8 @@ export default function NoteFocus() {
     const rec = new SR();
     recognitionRef.current = rec;
     rec.lang = "es-ES";
-    rec.continuous = false;      // se detiene en silencio automáticamente
-    rec.interimResults = false;  // solo texto final
+    rec.continuous = false;
+    rec.interimResults = false;
 
     const stopSafely = () => {
       try { rec.stop(); } catch {}
@@ -174,7 +177,7 @@ export default function NoteFocus() {
     rec.onstart = () => {
       setListening(true);
       if (endSilenceTimer.current) clearTimeout(endSilenceTimer.current);
-      endSilenceTimer.current = setTimeout(stopSafely, 20000); // failsafe: 20s
+      endSilenceTimer.current = setTimeout(stopSafely, 20000); // failsafe
     };
 
     rec.onresult = (ev) => {
@@ -348,7 +351,7 @@ export default function NoteFocus() {
             {note.text || <em className="text-slate-400">Sin texto…</em>}
           </p>
 
-          {/* Respuestas */}
+          {/* Respuestas (con fecha sin hora) */}
           <div>
             <h3 className="text-xs font-semibold text-slate-500 mb-2">Respuestas</h3>
             {Array.isArray(note.replies) && note.replies.length > 0 ? (
@@ -358,7 +361,9 @@ export default function NoteFocus() {
                     key={r.id || r.createdAt || idx}
                     className="bg-slate-50 rounded-xl px-3 py-2 text-sm text-slate-700"
                   >
-                    <p className="text-[11px] text-slate-400 mb-0.5">{r.author || "—"}</p>
+                    <p className="text-[11px] text-slate-400 mb-0.5">
+                      {r.author || "—"} · {formatDateOnly(r.createdAt)}
+                    </p>
                     {r.text}
                   </li>
                 ))}
@@ -394,7 +399,7 @@ export default function NoteFocus() {
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
             className="flex-1 border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-200"
-            placeholder={forceDisableSpeech ? "Puedes usar el micrófono del teclado de iPhone…" : "Responder…"}
+            placeholder={forceDisableSpeech ? "En iPhone usa el micrófono del teclado para dictar…" : "Responder…"}
             disabled={!!note.deleted}
           />
 
@@ -409,7 +414,7 @@ export default function NoteFocus() {
 
         {forceDisableSpeech && !note.deleted && (
           <div className="px-4 pb-3 text-[11px] text-slate-400">
-            💡 En iPhone: toca el micrófono del <strong>teclado</strong> para dictar y el texto entrará aquí.
+            💡 En iPhone: usa el micrófono del <strong>teclado</strong> para dictar y el texto entrará aquí.
           </div>
         )}
       </div>
