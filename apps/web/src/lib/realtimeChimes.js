@@ -1,69 +1,43 @@
 // apps/web/src/lib/realtimeChimes.js
-// Hace sonar chimes SOLO en dispositivos remotos (evita el eco local).
+// Idempotente: evita "Identifier ... has already been declared" en HMR/build.
 
-const recentLocalOps = new Map(); // noteId -> timeoutId
-const TTL_MS = 6000; // ventana para considerar "eco" local
+const SHARED_KEY = "__nenenaRealtimeChimes__";
+const shared =
+  (globalThis[SHARED_KEY] ??= {
+    recentLocalOps: new Map(), // noteId -> timeoutId
+    cache: {},
+    TTL_MS: 6000,
+  });
 
-// apps/web/src/lib/realtimeChimes.js
-const recentLocalOps = new Map();
-const TTL_MS = 6000;
+function play(src) {
+  try {
+    (shared.cache[src] ||= new Audio(src)).cloneNode().play().catch(() => {});
+  } catch {}
+}
 
+/** Marca una operación local para evitar el eco de sonido en este cliente. */
 export function markLocalNoteTouch(noteId) {
   if (!noteId) return;
+  const { recentLocalOps, TTL_MS } = shared;
   clearTimeout(recentLocalOps.get(noteId));
   const t = setTimeout(() => recentLocalOps.delete(noteId), TTL_MS);
   recentLocalOps.set(noteId, t);
 }
 
+/** Devuelve true si debemos sonar (no es eco local reciente). */
 export function shouldPlayIncomingChime(noteId) {
-  return !recentLocalOps.has(noteId);
+  return !shared.recentLocalOps.has(noteId);
 }
 
-const cache = {};
-function play(src) {
-  try {
-    (cache[src] ||= new Audio(src)).cloneNode().play().catch(() => {});
-  } catch {}
-}
-
-// Si no tienes aún 3 archivos distintos, puedes apuntarlos al mismo
+// Rutas de sonidos (si aún no tienes chimes, puedes apuntar los tres al mismo archivo)
 const CHIMES = {
   created: "/sounds/chime-created.mp3",
   updated: "/sounds/chime-updated.mp3",
   deleted: "/sounds/chime-deleted.mp3",
 };
 
+/** Reproduce el chime indicado. */
 export function playNoteChime(kind = "updated") {
   const src = CHIMES[kind] || CHIMES.updated;
   play(src);
-}
-
-export function markLocalNoteTouch(noteId) {
-  if (!noteId) return;
-  clearTimeout(recentLocalOps.get(noteId));
-  const t = setTimeout(() => recentLocalOps.delete(noteId), TTL_MS);
-  recentLocalOps.set(noteId, t);
-}
-
-export function shouldPlayIncomingChime(noteId) {
-  // Si esta id fue “tocada” en este cliente hace poco, NO sonamos.
-  return !recentLocalOps.has(noteId);
-}
-
-// ---- Sonidos (placeholders). Si ya tienes tu reproductor de sonidos, usa ese.
-const cache = {};
-function play(src) {
-  try {
-    (cache[src] ||= new Audio(src)).cloneNode().play().catch(() => {});
-  } catch {}
-}
-
-const CHIMES = {
-  created: "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAAAABAAAA",
-  updated: "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAAAABAAAA",
-  deleted: "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAAAABAAAA",
-};
-
-export function playNoteChime(kind = "updated") {
-  play(CHIMES[kind] || CHIMES.updated);
 }
