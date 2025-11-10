@@ -4,16 +4,13 @@ import { nanoid } from "nanoid/non-secure";
 import { supabase, hasSupabase } from "@/lib/supabaseClient";
 
 /**
- * useUsersStore.jsx — con sincronización ligera a Supabase (pull + realtime)
- * Cambios respecto a la versión anterior:
- *  - startSync(): hace un pull inicial y abre canal realtime "users-realtime-lite"
- *  - upsertRemote(): ya existía (se mantiene)
- *  - addUser/updateColor: sin cambios externos (siguen llamando a upsert remoto si _syncEnabled)
- *  - lógica de saneo (name como JSON string) se mantiene
- *
- * Es 100% compatible con Sidebar, UsersSheetMobile y resto.
+ * useUsersStore.jsx — sincroniza con tabla 'nenena_users' de Supabase
+ * - Pull inicial + realtime (INSERT/UPDATE) + upsert remoto
+ * - Saneo de usuarios (name en JSON)
+ * - API compatible con Sidebar/UsersSheetMobile
  */
 
+const TABLE = "nenena_users";
 const DEFAULT_USERS = ["Catalina", "Cristina", "David", "Esther", "Griselda", "Yolanda", "TODOS"];
 
 // Normalizador de color
@@ -24,48 +21,49 @@ const cleanHSV = (c) => ({
   v: clamp(c?.v, 0, 100),
 });
 
-// Detección y reparación de usuarios corruptos (name guardado como JSON string)
+// Saneo: usuarios con name en JSON o sin id
 const looksLikeJSONName = (s) => typeof s === "string" && s.trim().startsWith("{") && s.includes('"name"');
 function fixCorruptedUsers(arr) {
-  let changed = false;
   const now = new Date().toISOString();
-  const out = (arr || []).map((u) => {
-    if (u && looksLikeJSONName(u.name)) {
-      try {
-        const parsed = JSON.parse(u.name);
-        changed = true;
+  return {
+    next: (arr || []).map((u) => {
+      if (u && looksLikeJSONName(u.name)) {
+        try {
+          const parsed = JSON.parse(u.name);
+          return {
+            ...u,
+            id: u.id || crypto.randomUUID?.() || `${Math.random()}`,
+            name: String(parsed?.name || "Usuario"),
+            color: cleanHSV(parsed?.color || u.color || { h: 200, s: 80, v: 90 }),
+            updated_at: now,
+          };
+        } catch { /* ignore */ }
+      }
+      if (u && !u.id && u.name && u.color) {
         return {
-          ...u,
-          id: u.id || crypto.randomUUID?.() || `${Math.random()}`,
-          name: String(parsed?.name || "Usuario"),
-          color: cleanHSV(parsed?.color || u.color || { h: 200, s: 80, v: 90 }),
+          id: crypto.randomUUID?.() || `${Math.random()}`,
+          name: String(u.name),
+          color: cleanHSV(u.color),
           updated_at: now,
         };
-      } catch {
-        return u;
       }
-    }
-    // Si está como {name,color} sin id
-    if (u && !u.id && u.name && u.color) {
-      changed = true;
       return {
-        id: crypto.randomUUID?.() || `${Math.random()}`,
-        name: String(u.name),
-        color: cleanHSV(u.color),
-        updated_at: now,
+        id: u?.id || crypto.randomUUID?.() || `${Math.random()}`,
+        name: String(u?.name || "Usuario"),
+        color: cleanHSV(u?.color || { h: 200, s: 80, v: 90 }),
+        updated_at: u?.updated_at || now,
       };
-    }
-    return u;
-  });
-  return { next: out, changed };
+    }),
+    changed: true,
+  };
 }
 
-// Mapear fila de BD a local
+// Mapea fila BD → local
 const mapRowToLocal = (row) => ({
-  id: row.id || `${row.name}`, // id opcional por compatibilidad
+  id: row.id || row.uuid || `${row.name}`,
   name: String(row.name),
   color: cleanHSV(row.color || { h: 200, s: 80, v: 90 }),
-  updated_at: row.updated_at || row.updatedAt || new Date().toISOString(),
+  updated_at: row.updated_at || row.inserted_at || row.updatedAt || new Date().toISOString(),
 });
 
 export const useUsersStore = create(
@@ -74,17 +72,16 @@ export const useUsersStore = create(
       users: [],
       pendingDeleteId: null,
 
-      // —— Sync flags ——
+      // Flags de sync
       _realtimeChan: null,
       _syncEnabled: false,
       _pollTimer: null,
 
       ensureDefaults: () => {
         const cur0 = get().users || [];
-        // Reparar nombres corruptos
-        const { next: repaired, changed } = fixCorruptedUsers(cur0);
-        if (changed) set({ users: repaired });
-        const cur = changed ? repaired : cur0;
+        const { next: repaired } = fixCorruptedUsers(cur0);
+        set({ users: repaired });
+        const cur = repaired;
 
         const names = new Set(cur.map((u) => u.name));
         const add = DEFAULT_USERS.filter((n) => !names.has(n));
@@ -113,9 +110,7 @@ export const useUsersStore = create(
               const parsed = JSON.parse(input);
               name = String(parsed?.name || "");
               if (parsed?.color) color = cleanHSV(parsed.color);
-            } catch {
-              name = String(input || "");
-            }
+            } catch { name = String(input || ""); }
           } else {
             name = input;
           }
@@ -133,7 +128,6 @@ export const useUsersStore = create(
         const u = { id: nanoid(), name, color, updated_at: now };
         set({ users: [...cur, u] });
 
-        // Upsert remoto opcional
         if (get()._syncEnabled) {
           try { get().upsertRemote(name, color, now); } catch {}
         }
@@ -164,12 +158,12 @@ export const useUsersStore = create(
         // (opcional) borrar remoto
       },
 
-      // —— Pull inicial y periódico ——
+      // Pull inicial y periódico
       pullUsersFromBackend: async () => {
         if (!hasSupabase || !supabase) return;
         const { data, error } = await supabase
-          .from("users")
-          .select("name,color,updated_at")
+          .from(TABLE)
+          .select("name,color,updated_at,inserted_at,id,uuid")
           .order("updated_at", { ascending: false });
         if (error || !Array.isArray(data)) return;
 
@@ -190,22 +184,20 @@ export const useUsersStore = create(
         });
       },
 
-      // —— Realtime ——
+      // Realtime
       startSync: async () => {
         if (get()._syncEnabled) return;
         set({ _syncEnabled: true });
 
         if (!hasSupabase || !supabase) return;
 
-        // Pull inicial
         try { await get().pullUsersFromBackend(); } catch {}
 
-        // Canal realtime
         const chan = supabase
-          .channel("users-realtime-lite")
+          .channel("nenena_users_realtime")
           .on(
             "postgres_changes",
-            { event: "INSERT", schema: "public", table: "users" },
+            { event: "INSERT", schema: "public", table: TABLE },
             (payload) => {
               const row = payload?.new;
               if (!row?.name) return;
@@ -213,7 +205,6 @@ export const useUsersStore = create(
               set((state) => {
                 const cur = state.users || [];
                 if (cur.some((u) => u.name === m.name)) {
-                  // si ya existe, aplicar merge por updated_at
                   return {
                     users: cur.map((u) => {
                       if (u.name !== m.name) return u;
@@ -229,7 +220,7 @@ export const useUsersStore = create(
           )
           .on(
             "postgres_changes",
-            { event: "UPDATE", schema: "public", table: "users" },
+            { event: "UPDATE", schema: "public", table: TABLE },
             (payload) => {
               const row = payload?.new;
               if (!row?.name) return;
@@ -247,7 +238,6 @@ export const useUsersStore = create(
           .subscribe();
         set({ _realtimeChan: chan });
 
-        // Pull periódico cada 45s (por si algún evento se perdiera)
         const t = setInterval(() => {
           get().pullUsersFromBackend()?.catch?.(() => {});
         }, 45000);
@@ -256,9 +246,7 @@ export const useUsersStore = create(
 
       stopSync: async () => {
         set({ _syncEnabled: false });
-        try {
-          if (get()._pollTimer) clearInterval(get()._pollTimer);
-        } catch {}
+        try { if (get()._pollTimer) clearInterval(get()._pollTimer); } catch {}
         set({ _pollTimer: null });
         try {
           const ch = get()._realtimeChan;
@@ -267,23 +255,21 @@ export const useUsersStore = create(
         set({ _realtimeChan: null });
       },
 
-      // Upsert remoto (seguro si hay supabase)
+      // Upsert remoto
       upsertRemote: async (name, color, updated_at) => {
         try {
           if (hasSupabase && supabase) {
-            await supabase.from("users").upsert(
+            await supabase.from(TABLE).upsert(
               { name, color, updated_at },
               { onConflict: "name" }
             );
           }
-        } catch {
-          // Silenciar errores remotos para no romper UI
-        }
+        } catch { /* silent */ }
       },
     }),
     {
       name: "nenena-users",
-      version: 4, // ⬅ fuerza migración para limpiar estados viejos
+      version: 4,
       migrate: (persisted, _v) => {
         const data = persisted || { users: [] };
         const users = Array.isArray(data.users) ? data.users : [];
