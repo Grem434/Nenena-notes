@@ -340,6 +340,11 @@ export const useUsersStore = create(
   )
 );
 
+// Exponer para consola/devtools (no afecta a producción)
+if (typeof window !== "undefined") {
+  window.useUsersStore = useUsersStore;
+}
+
 // Arranque: defaults + sync
 if (typeof window !== "undefined") {
   const s = useUsersStore.getState();
