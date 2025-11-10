@@ -1,10 +1,9 @@
 import { useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Plus, LayoutGrid, List, Volume2, VolumeX, Users, HelpCircle } from "lucide-react";
+import { Plus, LayoutGrid, List, Volume2, VolumeX, Users, HelpCircle, Sun, Moon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSoundStore } from "@/store/useSoundStore";
 import ThemeToggle from "@/components/ThemeToggle";
-import { Sun, Moon } from "lucide-react";
 import { useThemeStore } from "@/store/useThemeStore";
 
 function usePortalPosition(anchorRef, open) {
@@ -14,10 +13,6 @@ function usePortalPosition(anchorRef, open) {
     if (!open) return;
     const anchor = anchorRef.current;
     if (!anchor) return;
-
-    const theme = useThemeStore((s) => s.theme);
-    const setTheme = useThemeStore((s) => s.setTheme);
-    const toggleTheme = useThemeStore((s) => s.toggleTheme ?? (() => setTheme(theme === "dark" ? "light" : "dark")));
 
     const update = () => {
       const r = anchor.getBoundingClientRect();
@@ -89,6 +84,13 @@ export default function Navbar({
   const toggleMute = useSoundStore((s) => s.toggleMute);
   const effectiveMuted = isMuted || Number(volume) === 0;
 
+  // Tema (store) — usado por el botón móvil
+  const theme = useThemeStore((s) => s.theme);
+  const setTheme = useThemeStore((s) => s.setTheme);
+  const toggleTheme = useThemeStore(
+    (s) => s.toggleTheme ?? (() => setTheme(theme === "dark" ? "light" : "dark"))
+  );
+
   // WebAudio preview
   const acRef = useRef(null);
   const lastVolRef = useRef(Number(volume || 0));
@@ -134,25 +136,6 @@ export default function Navbar({
   const btnVolRef = useRef(null);
   const panelRef = useRef(null);
   const pos = usePortalPosition(btnVolRef, openVol);
-
-  useEffect(() => {
-    if (!openVol) return;
-    const onDoc = (e) => {
-      const t = e.target;
-      if (btnVolRef.current?.contains(t)) return;
-      if (panelRef.current?.contains(t)) return;
-      setOpenVol(false);
-    };
-    const onEsc = (e) => e.key === "Escape" && setOpenVol(false);
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("touchstart", onDoc, { passive: true });
-    document.addEventListener("keydown", onEsc);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("touchstart", onDoc);
-      document.removeEventListener("keydown", onEsc);
-    };
-  }, [openVol]);
 
   useEffect(() => {
     const el = document.documentElement;
@@ -216,19 +199,20 @@ export default function Navbar({
           <Users size={18} aria-hidden="true" />
         </button>
 
+        {/* Botón tema (solo móvil) */}
         <button
-  type="button"
-  aria-label="Cambiar tema"
-  title={theme === "dark" ? "Modo claro" : "Modo oscuro"}
-  onClick={toggleTheme}
-  className="md:hidden inline-flex items-center justify-center h-9 w-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
->
-  {theme === "dark" ? (
-    <Sun className="h-4 w-4" />
-  ) : (
-    <Moon className="h-4 w-4" />
-  )}
-</button>
+          type="button"
+          aria-label="Cambiar tema"
+          title={theme === "dark" ? "Modo claro" : "Modo oscuro"}
+          onClick={toggleTheme}
+          className="md:hidden inline-flex items-center justify-center h-9 w-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+        >
+          {theme === "dark" ? (
+            <Sun className="h-4 w-4" />
+          ) : (
+            <Moon className="h-4 w-4" />
+          )}
+        </button>
 
         {/* Toggle vista */}
         <button
@@ -294,7 +278,7 @@ export default function Navbar({
                   e.stopPropagation();
                   const next = Math.max(0, Math.min(1, Number(e.target.value) / 100));
                   setVolume(next);
-                  // Preview suave durante el arrastre (umbral fino e intervalo mínimo)
+                  // Preview suave durante el arrastre
                   const prev = lastVolRef.current;
                   const delta = Math.abs(next - prev);
                   lastVolRef.current = next;
