@@ -160,29 +160,56 @@ export const useUsersStore = create(
 
       // Pull inicial y periódico
       pullUsersFromBackend: async () => {
-        if (!hasSupabase || !supabase) return;
-        const { data, error } = await supabase
-          .from(TABLE)
-          .select("name,color,updated_at,inserted_at,id,uuid")
-          .order("updated_at", { ascending: false });
-        if (error || !Array.isArray(data)) return;
+  if (!hasSupabase || !supabase) return;
 
-        set((state) => {
-          const byName = new Map((state.users || []).map((u) => [u.name, u]));
-          for (const row of data) {
-            if (!row?.name) continue;
-            const m = mapRowToLocal(row);
-            const prev = byName.get(m.name);
-            if (!prev) byName.set(m.name, m);
-            else {
-              const pt = new Date(prev.updated_at || 0).getTime();
-              const nt = new Date(m.updated_at || 0).getTime();
-              if (nt >= pt) byName.set(m.name, { ...prev, ...m });
+  // ⚠️ Evitamos columnas problemáticas: pedimos todo y mapeamos después.
+  // Esto evita 400 si updated_at/inserted_at no existen o tienen otro nombre.
+  const { data, error } = await supabase
+    .from(TABLE)
+    .select("*"); // sin .order() para evitar 400 por columnas inexistentes
+
+  if (error || !Array.isArray(data)) {
+    console.warn("[users] pull error:", error);
+    return;
+  }
+
+  set((state) => {
+    const byName = new Map((state.users || []).map((u) => [u.name, u]));
+    for (const row of data) {
+      if (!row?.name) continue;
+      // Mapeo flexible: coge updated_at si existe; si no, inserted_at; si no, ahora.
+      const updated =
+        row.updated_at ||
+        row.inserted_at ||
+        row.updatedAt ||
+        row.insertedAt ||
+        new Date().toISOString();
+
+      const mapped = {
+        id: row.id || row.uuid || `${row.name}`,
+        name: String(row.name),
+        color: (row.color && typeof row.color === "object")
+          ? {
+              h: Number(row.color.h ?? 200),
+              s: Number(row.color.s ?? 80),
+              v: Number(row.color.v ?? 90),
             }
-          }
-          return { users: Array.from(byName.values()) };
-        });
-      },
+          : { h: 200, s: 80, v: 90 },
+        updated_at: updated,
+      };
+
+      const prev = byName.get(mapped.name);
+      if (!prev) {
+        byName.set(mapped.name, mapped);
+      } else {
+        const pt = new Date(prev.updated_at || 0).getTime();
+        const nt = new Date(mapped.updated_at || 0).getTime();
+        if (nt >= pt) byName.set(mapped.name, { ...prev, ...mapped });
+      }
+    }
+    return { users: Array.from(byName.values()) };
+  });
+},
 
       // Realtime
       startSync: async () => {
