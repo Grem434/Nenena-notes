@@ -262,18 +262,25 @@ export const useUsersStore = create(
               }));
             }
           )
-          .on(
-            "postgres_changes",
-            { event: "DELETE", schema: "public", table: TABLE },
-            (payload) => {
-              const row = payload?.old;
-              const name = row?.name;
-              if (!name) return;
-              set((state) => ({
-                users: (state.users || []).filter((u) => u.name !== name),
-              }));
-            }
-          )
+           .on(
+             "postgres_changes",
+             { event: "DELETE", schema: "public", table: TABLE },
+             (payload) => {
+               const row = payload?.old || {};
+               const delId = row.id || row.uuid || null;
+               const delName = row.name || null;
+               set((state) => {
+                 const cur = state.users || [];
+                 return {
+                   users: cur.filter((u) => {
+                     if (delId && u.id) return u.id !== delId;
+                     if (delName) return u.name !== delName;
+                     return true; // si no tenemos nada, no tocamos
+                   }),
+                 };
+               });
+             }
+           )
 
           .subscribe();
         set({ _realtimeChan: chan });
