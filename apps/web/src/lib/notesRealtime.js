@@ -1,46 +1,91 @@
 // apps/web/src/lib/notesRealtime.js
 import { getSupabase } from "@/lib/supabaseClient";
+import { shouldPlayIncomingChime, playNoteChime } from "@/lib/realtimeChimes";
 
 /**
  * Suscribe a cambios en la tabla 'notes' usando un canal propio,
  * separado del canal de sync general, para evitar colisiones.
- * - DELETE  -> aplica 'hard_delete' en local
- * - UPDATE (deleted true/false) -> aplica soft delete/restore
+ *
+ * Callbacks opcionales:
+ *  - onInsert(row)       -> creación remota (si quieres reflejar en el store)
+ *  - onSoftDelete(id,row)-> UPDATE con deleted=true
+ *  - onRestore(id,row)   -> UPDATE con deleted=false
+ *  - onHardDelete(id)    -> DELETE hard
+ *
+ * Chimes:
+ *  - Sólo suenan en este cliente si NO fue quien originó la operación
+ *    (se evita eco con markLocalNoteTouch/shouldPlayIncomingChime).
  */
-export function startNotesRealtime({ onHardDelete, onSoftDelete, onRestore }) {
+export function startNotesRealtime({ onInsert, onHardDelete, onSoftDelete, onRestore } = {}) {
   const supabase = getSupabase();
   if (!supabase) return () => {};
 
-  // ⚠️ usa un nombre de canal distinto al de sync.js
+  // Canal dedicado (no reutiliza el de sync)
   const channel = supabase
     .channel("notes-realtime-lite")
+
+    // INSERT (nota nueva)
     .on(
       "postgres_changes",
-      { event: "DELETE", schema: "public", table: "notes" },
+      { event: "INSERT", schema: "public", table: "notes" },
       (payload) => {
-        const id = payload?.old?.id;
-        if (id) onHardDelete?.(id);
+        const row = payload?.new;
+        if (!row?.id) return;
+
+        // Tu lógica de inserción remota (si quieres actualizar el store aquí)
+        onInsert?.(row);
+
+        // Chime sólo si no es eco local
+        if (shouldPlayIncomingChime(row.id)) playNoteChime("created");
       }
     )
+
+    // UPDATE (soft delete / restore)
     .on(
       "postgres_changes",
       { event: "UPDATE", schema: "public", table: "notes" },
       (payload) => {
         const row = payload?.new;
         if (!row?.id) return;
-        if (row.deleted === true) onSoftDelete?.(row.id, row);
-        if (row.deleted === false) onRestore?.(row.id, row);
+
+        // Soft delete
+        if (row.deleted === true) {
+          onSoftDelete?.(row.id, row);
+          if (shouldPlayIncomingChime(row.id)) playNoteChime("deleted");
+          return;
+        }
+
+        // Restore
+        if (row.deleted === false) {
+          onRestore?.(row.id, row);
+          if (shouldPlayIncomingChime(row.id)) playNoteChime("updated");
+          return;
+        }
+
+        // Si en el futuro quieres chime para “update normal”, puedes descomentar:
+        // if (shouldPlayIncomingChime(row.id)) playNoteChime("updated");
+      }
+    )
+
+    // DELETE (hard delete)
+    .on(
+      "postgres_changes",
+      { event: "DELETE", schema: "public", table: "notes" },
+      (payload) => {
+        const id = payload?.old?.id;
+        if (!id) return;
+
+        onHardDelete?.(id);
+        if (shouldPlayIncomingChime(id)) playNoteChime("deleted");
       }
     )
     .subscribe();
 
-  // Re-suscribe al recuperar visibilidad si fuera necesario (iOS puede pausar sockets)
+  // Re-suscripción defensiva al recuperar visibilidad (algunos navegadores pausan sockets)
   const onVisible = () => {
     try {
       if (document.visibilityState === "visible") {
-        // Nada que hacer si sigue activo; si el runtime cerró el canal, crear otro
-        // (supabase-js cierra internamente y reintenta, esto es un "belt & suspenders")
-        // No disponemos de un estado público del canal, así que nos limitamos a no hacer nada aquí.
+        // supabase-js reintenta internamente; dejamos esto como cinturón y tirantes
       }
     } catch {}
   };
