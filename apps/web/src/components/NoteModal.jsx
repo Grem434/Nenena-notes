@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { useNotesStore } from "@/store/useNotesStore";
 import { useUsersStore } from "@/store/useUsersStore";
 import { notify } from "@/lib/notify";
+import { playStartBeep, playEndBeep } from "@/lib/uiBeeps";
 
 const HIDE_MIC_THRESHOLD = 600; // si hay más de 600 chars en escritorio, ocultamos el botón 🎙️
 
@@ -116,6 +117,7 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
     };
 
     rec.onend = () => {
+      try { playEndBeep(); } catch {}
       setListening(false);
     };
 
@@ -185,6 +187,7 @@ export default function NoteModal({ open, onOpenChange, onSave, editingNote }) {
       try {
         setListening(true);
         rec.start();
+        try { playStartBeep(); } catch {}
       } catch {
         setListening(false);
         notify({

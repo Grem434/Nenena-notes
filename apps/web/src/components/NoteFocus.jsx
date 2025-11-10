@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Trash2, Undo2, Archive, CheckCircle2, Calendar, X, Mic } from "lucide-react";
 import { useNotesStore } from "@/store/useNotesStore";
 import { useUIStore } from "@/store/useUIStore";
+import { playStartBeep, playEndBeep } from "@/lib/uiBeeps";
 
 /* ===== utilidades de fecha ===== */
 function formatShortDM(iso) {
