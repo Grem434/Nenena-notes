@@ -21,6 +21,8 @@ import NoteSkeletons from "@/components/NoteSkeletons";
 import VirtualList from "@/components/VirtualList";
 import ShortcutsHelp from "@/components/ShortcutsHelp";
 import { startNotesRealtime } from "@/lib/notesRealtime";
+import "@/lib/uiBeeps";          // expone window.__testBeeps()
+import "@/lib/realtimeChimes";   // expone window.__testChime()
 
 const NoteFocusLazy = lazy(() => import("@/components/NoteFocus"));
 
