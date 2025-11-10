@@ -40,32 +40,36 @@ export function startNotesRealtime({ onInsert, onHardDelete, onSoftDelete, onRes
       }
     )
 
-    // UPDATE (soft delete / restore)
-    .on(
-      "postgres_changes",
-      { event: "UPDATE", schema: "public", table: "notes" },
-      (payload) => {
-        const row = payload?.new;
-        if (!row?.id) return;
+    // UPDATE (soft delete / restore) — CORREGIDO: compara old vs new
+.on(
+  "postgres_changes",
+  { event: "UPDATE", schema: "public", table: "notes" },
+  (payload) => {
+    const rowNew = payload?.new;
+    const rowOld = payload?.old;
+    if (!rowNew?.id) return;
 
-        // Soft delete
-        if (row.deleted === true) {
-          onSoftDelete?.(row.id, row);
-          if (shouldPlayIncomingChime(row.id)) playNoteChime("deleted");
-          return;
-        }
+    const wasDeleted = !!rowOld?.deleted;
+    const isDeleted  = !!rowNew?.deleted;
 
-        // Restore
-        if (row.deleted === false) {
-          onRestore?.(row.id, row);
-          if (shouldPlayIncomingChime(row.id)) playNoteChime("updated");
-          return;
-        }
+    // Soft delete (false -> true)
+    if (!wasDeleted && isDeleted) {
+      onSoftDelete?.(rowNew.id, rowNew);
+      if (shouldPlayIncomingChime(rowNew.id)) playNoteChime("deleted");
+      return;
+    }
 
-        // Si en el futuro quieres chime para “update normal”, puedes descomentar:
-        // if (shouldPlayIncomingChime(row.id)) playNoteChime("updated");
-      }
-    )
+    // Restore (true -> false)
+    if (wasDeleted && !isDeleted) {
+      onRestore?.(rowNew.id, rowNew);
+      if (shouldPlayIncomingChime(rowNew.id)) playNoteChime("updated");
+      return;
+    }
+
+    // Cualquier otro UPDATE (ej. abrir nota, editar sin borrar/restaurar) → sin sonido
+    // (si algún día quieres ding en edición normal, aquí lo activarías)
+  }
+)
 
     // DELETE (hard delete)
     .on(
