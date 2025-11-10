@@ -4,6 +4,8 @@ import { Plus, LayoutGrid, List, Volume2, VolumeX, Users, HelpCircle } from "luc
 import { cn } from "@/lib/utils";
 import { useSoundStore } from "@/store/useSoundStore";
 import ThemeToggle from "@/components/ThemeToggle";
+import { Sun, Moon } from "lucide-react";
+import { useThemeStore } from "@/store/useThemeStore";
 
 function usePortalPosition(anchorRef, open) {
   const [pos, setPos] = useState({ top: 0, left: 0, width: 220 });
@@ -12,6 +14,10 @@ function usePortalPosition(anchorRef, open) {
     if (!open) return;
     const anchor = anchorRef.current;
     if (!anchor) return;
+
+    const theme = useThemeStore((s) => s.theme);
+    const setTheme = useThemeStore((s) => s.setTheme);
+    const toggleTheme = useThemeStore((s) => s.toggleTheme ?? (() => setTheme(theme === "dark" ? "light" : "dark")));
 
     const update = () => {
       const r = anchor.getBoundingClientRect();
@@ -209,6 +215,20 @@ export default function Navbar({
         >
           <Users size={18} aria-hidden="true" />
         </button>
+
+        <button
+  type="button"
+  aria-label="Cambiar tema"
+  title={theme === "dark" ? "Modo claro" : "Modo oscuro"}
+  onClick={toggleTheme}
+  className="md:hidden inline-flex items-center justify-center h-9 w-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+>
+  {theme === "dark" ? (
+    <Sun className="h-4 w-4" />
+  ) : (
+    <Moon className="h-4 w-4" />
+  )}
+</button>
 
         {/* Toggle vista */}
         <button
