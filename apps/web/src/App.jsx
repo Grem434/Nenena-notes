@@ -21,6 +21,27 @@ import NoteSkeletons from "@/components/NoteSkeletons";
 import VirtualList from "@/components/VirtualList";
 import ShortcutsHelp from "@/components/ShortcutsHelp";
 import { startNotesRealtime } from "@/lib/notesRealtime";
+import { useEffect } from "react";
+
+function App() {
+  useEffect(() => {
+    const unlock = () => {
+      try {
+        const a = new Audio();
+        a.muted = true;
+        a.play().catch(()=>{});
+      } catch {}
+      window.removeEventListener("click", unlock);
+      window.removeEventListener("touchstart", unlock);
+    };
+    window.addEventListener("click", unlock, { once: true });
+    window.addEventListener("touchstart", unlock, { once: true });
+    return () => {
+      window.removeEventListener("click", unlock);
+      window.removeEventListener("touchstart", unlock);
+    };
+  }, []);
+}
 
 const NoteFocusLazy = lazy(() => import("@/components/NoteFocus"));
 
