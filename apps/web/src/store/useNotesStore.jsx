@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { pushNoteChange, pushReplyChange } from "@/lib/sync";
 import { supabase, hasSupabase } from "@/lib/supabaseClient";
+import { markLocalNoteTouch } from "@/lib/realtimeChimes";
 
 /* ===========================================================
    SINGLETON GUARD — evita múltiples instancias de la store
@@ -67,6 +68,7 @@ function createNotesStore() {
         addNote: (note) =>
           set((state) => {
             const id = isUUIDv4(note.id) ? note.id : uuidv4();
+            markLocalNoteTouch(id);
             const createdAt = note.createdAt || nowISO();
             const updatedAt = note.updatedAt || createdAt;
             const newNote = {
@@ -106,6 +108,7 @@ function createNotesStore() {
             const notes = state.notes.map((n) => {
               if (n.id !== id) return n;
               const updated = { ...n, ...patch, updatedAt: nowISO() };
+              markLocalNoteTouch(id);
               try {
                 pushNoteChange("update", updated);
               } catch {}
@@ -216,6 +219,7 @@ function createNotesStore() {
           // 1) Optimista en local + broadcast (manteniendo tu firma actual)
           set((state) => {
             const notes = state.notes.map((n) => {
+              markLocalNoteTouch(id);
               if (n.id !== id) return n;
               const updated = { ...n, deleted: true, updatedAt: nowISO() };
               try { pushNoteChange("update", updated); } catch {}
