@@ -148,15 +148,43 @@ export const useUsersStore = create(
 
       askDeleteUser: (name) => set({ pendingDeleteId: name }),
       cancelDeleteUser: () => set({ pendingDeleteId: null }),
-      confirmDeleteUser: () => {
-        const id = get().pendingDeleteId;
-        if (!id) return;
-        set((state) => ({
-          users: (state.users || []).filter((u) => u.name !== id),
-          pendingDeleteId: null,
-        }));
-        // (opcional) borrar remoto
-      },
+confirmDeleteUser: async () => {
+  const pending = get().pendingDeleteId; // puede ser name o id, según como lo guardes
+  if (!pending) return;
+
+  // 1) Encontrar el usuario a borrar (por id o por name)
+  const cur = get().users || [];
+  let byId = cur.find((u) => u.id === pending);
+  let byName = cur.find((u) => u.name === pending);
+  const victim = byId || byName;
+  if (!victim) {
+    // Limpia el pending si no existe
+    set({ pendingDeleteId: null });
+    return;
+  }
+
+  // 2) BORRADO LOCAL optimista (lo quitamos ya)
+  set((state) => ({
+    users: (state.users || []).filter((u) => u !== victim),
+    pendingDeleteId: null,
+  }));
+
+  // 3) BORRADO REMOTO en Supabase (por id si lo tenemos; si no, por name)
+  try {
+    if (hasSupabase && supabase) {
+      const q = supabase.from(TABLE).delete();
+      if (victim.id) {
+        await q.eq("id", victim.id);
+      } else {
+        await q.eq("name", victim.name);
+      }
+    }
+  } catch (e) {
+    console.warn("[users] remote delete failed:", e?.message || e);
+    // Intento de reconciliar para no dejar fantasmas
+    try { await get().pullUsersFromBackend?.(); } catch {}
+  }
+},
 
       // Pull inicial y periódico
       pullUsersFromBackend: async () => {
@@ -262,25 +290,32 @@ export const useUsersStore = create(
               }));
             }
           )
-           .on(
-             "postgres_changes",
-             { event: "DELETE", schema: "public", table: TABLE },
-             (payload) => {
-               const row = payload?.old || {};
-               const delId = row.id || row.uuid || null;
-               const delName = row.name || null;
-               set((state) => {
-                 const cur = state.users || [];
-                 return {
-                   users: cur.filter((u) => {
-                     if (delId && u.id) return u.id !== delId;
-                     if (delName) return u.name !== delName;
-                     return true; // si no tenemos nada, no tocamos
-                   }),
-                 };
-               });
-             }
-           )
+.on(
+  "postgres_changes",
+  { event: "DELETE", schema: "public", table: TABLE },
+  (payload) => {
+    const row = payload?.old || {};
+    const delId = row.id || row.uuid || null;
+    const delName = row.name || null;
+
+    set((state) => {
+      const cur = state.users || [];
+      return {
+        users: cur.filter((u) => {
+          if (delId && u.id) return u.id !== delId;
+          if (delName) return u.name !== delName;
+          return true;
+        }),
+      };
+    });
+
+    // Traza útil para verificar que llegó el evento
+    try {
+      console.debug("[users] realtime DELETE:", { id: delId, name: delName });
+    } catch {}
+  }
+)
+
 
           .subscribe();
         set({ _realtimeChan: chan });
