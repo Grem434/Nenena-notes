@@ -262,6 +262,19 @@ export const useUsersStore = create(
               }));
             }
           )
+          .on(
+            "postgres_changes",
+            { event: "DELETE", schema: "public", table: TABLE },
+            (payload) => {
+              const row = payload?.old;
+              const name = row?.name;
+              if (!name) return;
+              set((state) => ({
+                users: (state.users || []).filter((u) => u.name !== name),
+              }));
+            }
+          )
+
           .subscribe();
         set({ _realtimeChan: chan });
 
@@ -281,6 +294,25 @@ export const useUsersStore = create(
         } catch {}
         set({ _realtimeChan: null });
       },
+
+      hardRefreshUsersFromBackend: async () => {
+      if (!hasSupabase || !supabase) return;
+      const { data, error } = await supabase.from(TABLE).select("*");
+      if (error || !Array.isArray(data)) return;
+      const now = new Date().toISOString();
+      const mapped = data
+        .filter((r) => r?.name)
+        .map((row) => ({
+          id: row.id || row.uuid || `${row.name}`,
+          name: String(row.name),
+          color: row.color && typeof row.color === "object"
+            ? { h: Number(row.color.h ?? 200), s: Number(row.color.s ?? 80), v: Number(row.color.v ?? 90) }
+            : { h: 200, s: 80, v: 90 },
+          updated_at:
+            row.updated_at || row.inserted_at || row.updatedAt || row.insertedAt || now,
+        }));
+      set({ users: mapped });
+    },
 
       // Upsert remoto
       upsertRemote: async (name, color, updated_at) => {
