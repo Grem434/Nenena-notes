@@ -300,7 +300,28 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [authenticated, open, helpOpen, setFilter, setFocusedNote]);
 
-  const filtered = useMemo(() => {
+  
+// Listener de navegación móvil (de otros / personales / destinatario)
+useEffect(() => {
+  const onGo = (e) => {
+    const { view, recipient } = e.detail || {};
+    if (view === "all") {
+      setSelectedRecipient(null);
+      setSelectedPersonal(null);
+      setFilter("todas");
+    } else if (view === "personal") {
+      setSelectedRecipient(null);
+      setFilter("personales");
+    } else if (view === "recipient" && recipient) {
+      setSelectedPersonal(null);
+      setSelectedRecipient(recipient);
+      setFilter("todas");
+    }
+  };
+  window.addEventListener("nenena:go", onGo);
+  return () => window.removeEventListener("nenena:go", onGo);
+}, [setFilter]);
+const filtered = useMemo(() => {
     if (!authenticated || !ready) return [];
     if (!Array.isArray(notes)) return [];
     let list = [];
