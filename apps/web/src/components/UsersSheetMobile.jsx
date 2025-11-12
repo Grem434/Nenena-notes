@@ -2,7 +2,6 @@ import React, { useMemo } from "react";
 import { X, Mail, User2 } from "lucide-react";
 import { useUsersStore } from "@/store/useUsersStore";
 import { useNotesStore } from "@/store/useNotesStore";
-import { goAll, goPersonal } from "@/lib/navBus";
 
 function hsvToRgba(c, alpha = 1) {
   if (!c) return `rgba(244,114,182,${alpha})`;
@@ -90,8 +89,8 @@ export default function UsersSheetMobile({
           ) : (
             usersWithCounts.map((user) => {
               const dot = hsvToRgba(user.color, 1);
-              const bg1 = hsvToRgba(user.color, 0.18);
-              const bg2 = hsvToRgba(user.color, 0.12);
+              const bgInbox = hsvToRgba(user.color, 0.22);
+              const bgPersonal = hsvToRgba(user.color, 0.12);
               return (
                 <div
                   key={user.name}
@@ -106,18 +105,19 @@ export default function UsersSheetMobile({
                     <p className="text-sm text-slate-700 dark:text-slate-200 truncate">
                       {user.name}
                     </p>
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-3 mt-1">
                       <button
                         type="button"
                         onClick={() => {
                           onSelectInbound?.(user.name);
                           onOpenChange?.(false);
                         }}
-                        className="inline-flex items-center gap-1 rounded-full text-[10px] px-2 py-0.5"
-                        style={{ backgroundColor: bg1 }}
+                        className="inline-flex items-center gap-1 rounded-full text-[11px] px-2.5 py-1
+                                   focus:outline-none focus:ring-2 focus:ring-slate-300"
+                        style={{ backgroundColor: bgInbox }}
                         title="Notas que le han enviado otros"
                       >
-                        <Mail className="w-3 h-3" />
+                        <Mail className="w-3.5 h-3.5" />
                         {user.inbound}
                       </button>
                       <button
@@ -126,11 +126,12 @@ export default function UsersSheetMobile({
                           onSelectPersonal?.(user.name);
                           onOpenChange?.(false);
                         }}
-                        className="inline-flex items-center gap-1 rounded-full text-[10px] px-2 py-0.5"
-                        style={{ backgroundColor: bg2 }}
+                        className="inline-flex items-center gap-1 rounded-full text-[11px] px-2.5 py-1
+                                   focus:outline-none focus:ring-2 focus:ring-slate-300"
+                        style={{ backgroundColor: bgPersonal }}
                         title="Notas personales de este usuario"
                       >
-                        <User2 className="w-3 h-3" />
+                        <User2 className="w-3.5 h-3.5" />
                         {user.personal}
                       </button>
                     </div>
@@ -139,35 +140,6 @@ export default function UsersSheetMobile({
               );
             })
           )}
-        </div>
-
-        {/* Cápsulas de navegación al final del sheet (de otros / personales) */}
-        <div className="mt-1 mb-3 px-3">
-          <div className="flex items-center justify-center gap-3">
-            <button
-              type="button"
-              onClick={() => { goAll(); onOpenChange?.(false); }}
-              className="min-w-[116px] px-3 py-2 rounded-full text-sm font-medium
-                         border border-slate-300 bg-white text-slate-700
-                         dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200
-                         active:scale-[0.99] transition"
-              aria-label="Ver todas las notas (de otros)"
-            >
-              de otros
-            </button>
-
-            <button
-              type="button"
-              onClick={() => { goPersonal(); onOpenChange?.(false); }}
-              className="min-w-[116px] px-3 py-2 rounded-full text-sm font-medium
-                         border border-slate-300 bg-white text-slate-700
-                         dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200
-                         active:scale-[0.99] transition"
-              aria-label="Ver notas personales"
-            >
-              personales
-            </button>
-          </div>
         </div>
       </div>
     </div>

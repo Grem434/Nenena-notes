@@ -20,9 +20,6 @@ import { pullAllNotes, startNotesSync, stopNotesSync } from "@/lib/sync";
 import NoteSkeletons from "@/components/NoteSkeletons";
 import VirtualList from "@/components/VirtualList";
 import ShortcutsHelp from "@/components/ShortcutsHelp";
-import { startNotesRealtime } from "@/lib/notesRealtime";
-import "@/lib/uiBeeps";          // expone window.__testBeeps()
-import "@/lib/realtimeChimes";   // expone window.__testChime()
 
 const NoteFocusLazy = lazy(() => import("@/components/NoteFocus"));
 
@@ -73,25 +70,6 @@ function useDebouncedValue(value, delay = 250) {
 }
 
 export default function App() {
-  // 🔓 Desbloqueo de audio al primer click/touch (para que suenen chimes remotos)
-  useEffect(() => {
-    const unlock = () => {
-      try {
-        const a = new Audio();
-        a.muted = true;
-        a.play().catch(() => {});
-      } catch {}
-      window.removeEventListener("click", unlock);
-      window.removeEventListener("touchstart", unlock);
-    };
-    window.addEventListener("click", unlock, { once: true });
-    window.addEventListener("touchstart", unlock, { once: true });
-    return () => {
-      window.removeEventListener("click", unlock);
-      window.removeEventListener("touchstart", unlock);
-    };
-  }, []);
-
   const [authenticated, setAuthenticated] = useState(false);
   const [ready, setReady] = useState(false);
 
@@ -125,29 +103,13 @@ export default function App() {
   const applyRemoteNote = useNotesStore((s) => s.applyRemoteNote);
   const applyRemoteNotes = useNotesStore((s) => s.applyRemoteNotes);
 
-  // hooks para aplicar eventos remotos (realtime)
-  const applyRemoteHardDelete = useNotesStore((s) => s.applyRemoteHardDelete);
-  const applyRemoteSoftDelete = useNotesStore((s) => s.applyRemoteSoftDelete);
-  const applyRemoteRestore = useNotesStore((s) => s.applyRemoteRestore);
-
   useUsersStore((s) => s.users ?? []);
   const isCompactView = useUIStore((s) => s.isCompactView);
   const toggleCompact = useUIStore((s) => s.toggleCompact);
   const setFocusedNote = useUIStore((s) => s.setFocusedNote);
   const cardTone = useStyleStore((s) => s.cardTone);
 
-  // arrancar realtime para INSERT/DELETE/UPDATE (papelera/restaurar y hard delete)
-  useEffect(() => {
-    const stop = startNotesRealtime({
-      onInsert: (row) => applyRemoteNote?.(row, "UPSERT"),
-      onHardDelete: (id) => applyRemoteHardDelete?.(id),
-      onSoftDelete: (id) => applyRemoteSoftDelete?.(id),
-      onRestore: (id) => applyRemoteRestore?.(id),
-    });
-    return () => stop?.();
-  }, [applyRemoteNote, applyRemoteHardDelete, applyRemoteSoftDelete, applyRemoteRestore]);
-
-  useEffect(() => {
+    useEffect(() => {
     if (selectedRecipient && filter !== "todas") {
       setSelectedRecipient(null);
     }
@@ -226,12 +188,9 @@ export default function App() {
         }),
       (msg) => notify({ variant: "info", title: msg })
     );
-  }, [addNote]);
-
-  useEffect(() => {
     const t = setTimeout(() => setReady(true), 300);
     return () => clearTimeout(t);
-  }, []);
+  }, [addNote]);
 
   useEffect(() => {
     if (!authenticated) return;
@@ -300,28 +259,7 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [authenticated, open, helpOpen, setFilter, setFocusedNote]);
 
-  
-// Listener de navegación móvil (de otros / personales / destinatario)
-useEffect(() => {
-  const onGo = (e) => {
-    const { view, recipient } = e.detail || {};
-    if (view === "all") {
-      setSelectedRecipient(null);
-      setSelectedPersonal(null);
-      setFilter("todas");
-    } else if (view === "personal") {
-      setSelectedRecipient(null);
-      setFilter("personales");
-    } else if (view === "recipient" && recipient) {
-      setSelectedPersonal(null);
-      setSelectedRecipient(recipient);
-      setFilter("todas");
-    }
-  };
-  window.addEventListener("nenena:go", onGo);
-  return () => window.removeEventListener("nenena:go", onGo);
-}, [setFilter]);
-const filtered = useMemo(() => {
+  const filtered = useMemo(() => {
     if (!authenticated || !ready) return [];
     if (!Array.isArray(notes)) return [];
     let list = [];
@@ -329,39 +267,66 @@ const filtered = useMemo(() => {
       list = notes.filter((n) => n.to === selectedRecipient && !n.deleted && !n.archived && !isPersonal(n));
     } else {
       switch (filter) {
-        case "todas":
-          list = notes.filter((n) => !n.archived && !n.deleted && !isPersonal(n));
-          break;
-        case "pendiente":
-          list = notes.filter((n) => n.status === "pendiente" && !n.archived && !n.deleted && !isPersonal(n));
-          break;
-        case "resuelta":
-          list = notes.filter((n) => n.status === "resuelta" && !n.archived && !n.deleted && !isPersonal(n));
-          break;
-        case "archivadas":
-          list = notes.filter((n) => n.archived && !n.deleted && !isPersonal(n));
-          break;
-        case "personales":
-          if (selectedPersonal)
-            list = notes.filter(
-              (n) => n.from === selectedPersonal && n.to === selectedPersonal && !n.archived && !n.deleted
-            );
-          break;
-        case "papelera":
-          // 👇 muestra TODAS las borradas
-          list = notes.filter((n) => n.deleted);
-          break;
-        default:
-          list = notes.filter((n) => !n.archived && !n.deleted && !isPersonal(n));
-      }
+  case "todas":
+    list = notes.filter(
+      (n) => !n.archived && !n.deleted && !isPersonal(n)
+    );
+    break;
+
+  case "pendiente":
+    list = notes.filter(
+      (n) =>
+        n.status === "pendiente" &&
+        !n.archived &&
+        !n.deleted &&
+        !isPersonal(n)
+    );
+    break;
+
+  case "resuelta":
+    list = notes.filter(
+      (n) =>
+        n.status === "resuelta" &&
+        !n.archived &&
+        !n.deleted &&
+        !isPersonal(n)
+    );
+    break;
+
+  case "archivadas":
+    list = notes.filter(
+      (n) => n.archived && !n.deleted && !isPersonal(n)
+    );
+    break;
+
+  case "personales":
+    if (selectedPersonal)
+      list = notes.filter(
+        (n) =>
+          n.from === selectedPersonal &&
+          n.to === selectedPersonal &&
+          !n.archived &&
+          !n.deleted
+      );
+    break;
+
+  case "papelera":
+    // 👇 aquí el cambio importante: muestra TODAS las borradas
+    list = notes.filter((n) => n.deleted);
+    break;
+
+  default:
+    list = notes.filter(
+      (n) => !n.archived && !n.deleted && !isPersonal(n)
+    );
+}
     }
     if (debouncedSearch.trim()) {
       const term = debouncedSearch.toLowerCase();
-      list = list.filter(
-        (n) =>
-          n.text?.toLowerCase().includes(term) ||
-          n.from?.toLowerCase().includes(term) ||
-          n.to?.toLowerCase().includes(term)
+      list = list.filter((n) =>
+        n.text?.toLowerCase().includes(term) ||
+        n.from?.toLowerCase().includes(term) ||
+        n.to?.toLowerCase().includes(term)
       );
     }
     return list;
@@ -421,7 +386,7 @@ const filtered = useMemo(() => {
             onOpenHelp={() => setHelpOpen(true)}
           />
 
-          <div className="sticky top=[56px] z-10 bg-white/85 backdrop-blur-md border-b border-slate-100">
+          <div className="sticky top-[56px] z-10 bg-white/85 backdrop-blur-md border-b border-slate-100">
             <div className="max-w-7xl mx-auto w-full px-4 py-2">
               <h2 className="text-sm font-medium text-slate-600 select-none">
                 {viewLabel}
@@ -504,6 +469,7 @@ const filtered = useMemo(() => {
           }}
         />
 
+
         <NoteModal
           open={open}
           onOpenChange={setOpen}
@@ -518,15 +484,13 @@ const filtered = useMemo(() => {
         onOpenChange={setOpenUsers}
         onSelectInbound={(name) => {
           setSelectedPersonal(null);
-          if (name == null) {
-            // RESET destinatario → volver a generales
-            setSelectedRecipient(null);
-            setFilter("todas");
-          } else {
-            // Selección normal
-            setSelectedRecipient(name);
-            setFilter("todas");
-          }
+          setSelectedRecipient(name);
+          setFilter("todas");
+        }}
+        onSelectPersonal={(name) => {
+          setSelectedRecipient(null);
+          setSelectedPersonal(name);
+          setFilter("personales");
         }}
       />
 
