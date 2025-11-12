@@ -60,38 +60,7 @@ async function clearNenenaLocalDataSoft() {
   } catch {}
 }
 
-// Reconciliación agresiva en móvil para evitar "fantasmas" y desincronía de colores
-useEffect(() => {
-  const refreshAll = () => {
-    try { require("@/store/useNotesStore").useNotesStore.getState().hardRefreshNotesFromBackend?.({ overwrite: true }); } catch {}
-    try { require("@/store/useUsersStore").useUsersStore.getState().hardRefreshUsersFromBackend?.({ overwrite: true }); } catch {}
-  };
 
-  // Primera carga en móvil
-  try { const { isMobileUA } = require("@/lib/isMobile"); if (isMobileUA()) refreshAll(); } catch {}
-
-  const onFocus = () => refreshAll();
-  const onVisible = () => { if (document.visibilityState === "visible") refreshAll(); };
-  const onOnline = () => refreshAll();
-
-  window.addEventListener("focus", onFocus);
-  document.addEventListener("visibilitychange", onVisible);
-  window.addEventListener("online", onOnline);
-
-  // Poll suave cada 60s sólo en móvil
-  let timer = null;
-  try {
-    const { isMobileUA } = require("@/lib/isMobile");
-    if (isMobileUA()) timer = setInterval(refreshAll, 60000);
-  } catch {}
-
-  return () => {
-    window.removeEventListener("focus", onFocus);
-    document.removeEventListener("visibilitychange", onVisible);
-    window.removeEventListener("online", onOnline);
-    if (timer) clearInterval(timer);
-  };
-}, []);
 
 // Debounce
 function useDebouncedValue(value, delay = 250) {
@@ -247,6 +216,33 @@ export default function App() {
     const pull = () => {
       try { useUsersStore.getState().pullRemote?.(); } catch (e) { console.warn("[users] pullRemote@App error", e); }
     };
+  // 🛟 Reconciliación agresiva (solo móvil) para evitar notas fantasma y desincronía de colores
+  useEffect(() => {
+    const refreshAll = () => {
+      try { useNotesStore.getState().hardRefreshNotesFromBackend?.({ overwrite: true }); } catch {}
+      try { useUsersStore.getState().hardRefreshUsersFromBackend?.({ overwrite: true }); } catch {}
+    };
+    try { if (isMobileUA()) refreshAll(); } catch {}
+
+    const onFocus = () => refreshAll();
+    const onVisible = () => { if (document.visibilityState === "visible") refreshAll(); };
+    const onOnline = () => refreshAll();
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", onOnline);
+
+    let timer = null;
+    try { if (isMobileUA()) timer = setInterval(refreshAll, 60000); } catch {}
+
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", onOnline);
+      if (timer) clearInterval(timer);
+    };
+  }, []);
+
     pull();
     const onFocus = () => pull();
     const onVisible = () => (document.visibilityState === "visible" ? pull() : null);
