@@ -211,11 +211,7 @@ export default function App() {
     };
   }, [authenticated, applyRemoteNote, applyRemoteNotes]);
 
-  // 🔄 Pull de colores en foco/visible/online
-  useEffect(() => {
-    const pull = () => {
-      try { useUsersStore.getState().pullRemote?.(); } catch (e) { console.warn("[users] pullRemote@App error", e); }
-    };
+  
   // 🛟 Reconciliación agresiva (solo móvil) para evitar notas fantasma y desincronía de colores
   useEffect(() => {
     const refreshAll = () => {
@@ -243,6 +239,11 @@ export default function App() {
     };
   }, []);
 
+  // 🔄 Pull de colores en foco/visible/online
+  useEffect(() => {
+    const pull = () => {
+      try { useUsersStore.getState().pullRemote?.(); } catch (e) { console.warn("[users] pullRemote@App error", e); }
+    };
     pull();
     const onFocus = () => pull();
     const onVisible = () => (document.visibilityState === "visible" ? pull() : null);
@@ -256,6 +257,7 @@ export default function App() {
       window.removeEventListener("online", onOnline);
     };
   }, []);
+
 
   const isPersonal = (n) => n.from && n.to && n.from === n.to;
 
