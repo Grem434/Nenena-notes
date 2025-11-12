@@ -211,6 +211,45 @@ export default function App() {
     };
   }, [authenticated, applyRemoteNote, applyRemoteNotes]);
 
+  // 📥 Quick Notes desde la extensión (bridge por window.postMessage)
+  useEffect(() => {
+    function onQuickNotes(ev) {
+      const d = ev?.data;
+      if (!d || d.source !== "nenena-quicknote" || d.type !== "nenena:quicknotes") return;
+      const notes = Array.isArray(d.notes) ? d.notes : [];
+      if (!notes.length) return;
+
+      let created = 0;
+      for (const n of notes) {
+        // Normaliza al modelo de la store
+        addNote({
+          text: String(n?.text ?? "").trim(),
+          from: String(n?.from ?? ""),
+          to: String(n?.to ?? ""),
+          status: n?.status === "resuelta" ? "resuelta" : "pendiente",
+          archived: !!n?.archived, // por defecto false
+          createdAt: n?.createdAt || new Date().toISOString(),
+        });
+        created++;
+      }
+
+      // Aviso visual
+      try {
+        notify({
+          variant: "info",
+          title: "Notas rápidas",
+          description: created === 1 ? "Se añadió 1 nota" : `Se añadieron ${created} notas`,
+        });
+      } catch {}
+
+      // ACK opcional para el content script (logs)
+      try {
+        window.postMessage({ type: "nenena:quicknotes:ack", received: created }, "*");
+      } catch {}
+    }
+    window.addEventListener("message", onQuickNotes);
+    return () => window.removeEventListener("message", onQuickNotes);
+  }, [addNote]);
   
   // 🛟 Reconciliación agresiva (solo móvil) para evitar notas fantasma y desincronía de colores
   useEffect(() => {
