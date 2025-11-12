@@ -20,6 +20,7 @@ import { pullAllNotes, startNotesSync, stopNotesSync } from "@/lib/sync";
 import NoteSkeletons from "@/components/NoteSkeletons";
 import VirtualList from "@/components/VirtualList";
 import ShortcutsHelp from "@/components/ShortcutsHelp";
+import { isMobileUA } from "@/lib/isMobile";
 
 const NoteFocusLazy = lazy(() => import("@/components/NoteFocus"));
 
@@ -58,6 +59,39 @@ async function clearNenenaLocalDataSoft() {
     }
   } catch {}
 }
+
+// Reconciliación agresiva en móvil para evitar "fantasmas" y desincronía de colores
+useEffect(() => {
+  const refreshAll = () => {
+    try { require("@/store/useNotesStore").useNotesStore.getState().hardRefreshNotesFromBackend?.({ overwrite: true }); } catch {}
+    try { require("@/store/useUsersStore").useUsersStore.getState().hardRefreshUsersFromBackend?.({ overwrite: true }); } catch {}
+  };
+
+  // Primera carga en móvil
+  try { const { isMobileUA } = require("@/lib/isMobile"); if (isMobileUA()) refreshAll(); } catch {}
+
+  const onFocus = () => refreshAll();
+  const onVisible = () => { if (document.visibilityState === "visible") refreshAll(); };
+  const onOnline = () => refreshAll();
+
+  window.addEventListener("focus", onFocus);
+  document.addEventListener("visibilitychange", onVisible);
+  window.addEventListener("online", onOnline);
+
+  // Poll suave cada 60s sólo en móvil
+  let timer = null;
+  try {
+    const { isMobileUA } = require("@/lib/isMobile");
+    if (isMobileUA()) timer = setInterval(refreshAll, 60000);
+  } catch {}
+
+  return () => {
+    window.removeEventListener("focus", onFocus);
+    document.removeEventListener("visibilitychange", onVisible);
+    window.removeEventListener("online", onOnline);
+    if (timer) clearInterval(timer);
+  };
+}, []);
 
 // Debounce
 function useDebouncedValue(value, delay = 250) {
