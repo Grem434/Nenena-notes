@@ -144,6 +144,14 @@ export default function Navbar({
     el.style.setProperty("--sat", `env(safe-area-inset-top, ${sat}px)`);
   }, []);
 
+  // CERRAR PANEL CON ESC
+  useEffect(() => {
+    if (!openVol) return;
+    const onKey = (e) => { if (e.key === "Escape") setOpenVol(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [openVol]);
+
   const handleSubmit = (e) => { e.preventDefault(); inputRef.current?.blur(); };
 
   const ToggleIcon = isCompactView ? LayoutGrid : List;
@@ -247,85 +255,103 @@ export default function Navbar({
           <SoundIcon size={18} aria-hidden="true" />
         </button>
 
-        {/* Panel de volumen */}
-        {openVol &&
-          createPortal(
-            <div
-              ref={panelRef}
-              role="dialog"
-              aria-modal="true"
-              aria-label="Ajustes de volumen"
-              className="fixed z-50 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-[0_8px_30px_rgba(0,0,0,0.08)] p-3"
-              style={{
-                top: pos.top, left: pos.left, width: pos.width,
-                maxHeight: "calc(100dvh - 16px)", overflow: "auto",
-              }}
-              onMouseDown={(e) => e.stopPropagation()}
-              onTouchStart={(e) => e.stopPropagation()}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[12px] text-slate-600 dark:text-slate-300">Volumen</span>
-                <span className="text-[12px] font-medium text-slate-700 dark:text-slate-200">
-                  {Math.round(Number(volume || 0) * 100)}%
-                </span>
-              </div>
+{openVol &&
+  createPortal(
+    <>
+      {/* Backdrop: click/touch fuera -> cierra */}
+      <div
+        className="fixed inset-0 z-40"
+        onClick={() => setOpenVol(false)}
+        onTouchStart={() => setOpenVol(false)}
+        aria-hidden="true"
+      />
+      {/* Panel */}
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Ajustes de volumen"
+        className="fixed z-50 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-[0_8px_30px_rgba(0,0,0,0.08)] p-3"
+        style={{
+          top: pos.top, left: pos.left, width: pos.width,
+          maxHeight: "calc(100dvh - 16px)", overflow: "auto",
+        }}
+        // Evitamos que el click dentro burbujee y cierre
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[12px] text-slate-600 dark:text-slate-300">Volumen</span>
+          <span className="text-[12px] font-medium text-slate-700 dark:text-slate-200">
+            {Math.round(Number(volume || 0) * 100)}%
+          </span>
+        </div>
 
-              <input
-                type="range" min={0} max={100} step={1}
-                value={Math.round(Number(volume || 0) * 100)}
-                onChange={async (e) => {
-                  e.stopPropagation();
-                  const next = Math.max(0, Math.min(1, Number(e.target.value) / 100));
-                  setVolume(next);
-                  // Preview suave durante el arrastre
-                  const prev = lastVolRef.current;
-                  const delta = Math.abs(next - prev);
-                  lastVolRef.current = next;
-                  const now = Date.now();
-                  const THR=0.02, MIN=140;
-                  if (delta < THR || now - lastPingAt.current < MIN) return;
-                  await playPreview(next);
-                  lastPingAt.current = now;
-                }}
-                onPointerUp={async (e) => {
-                  e.stopPropagation();
-                  const v = Math.max(0, Math.min(1, Number(e.currentTarget.value) / 100));
-                  if (!isMuted && v > 0) { await playPreview(v); lastPingAt.current = Date.now(); }
-                }}
-                onTouchEnd={async (e) => {
-                  e.stopPropagation();
-                  const v = Math.max(0, Math.min(1, Number(e.currentTarget.value) / 100));
-                  if (!isMuted && v > 0) { await playPreview(v); lastPingAt.current = Date.now(); }
-                }}
-                className="w-full h-2 accent-pink-500"
-                aria-label="Volumen"
-              />
+        <input
+          type="range" min={0} max={100} step={1}
+          value={Math.round(Number(volume || 0) * 100)}
+          onChange={async (e) => {
+            e.stopPropagation();
+            const next = Math.max(0, Math.min(1, Number(e.target.value) / 100));
+            setVolume(next);
+            const prev = lastVolRef.current;
+            const delta = Math.abs(next - prev);
+            lastVolRef.current = next;
+            const now = Date.now();
+            const THR = 0.02, MIN = 140;
+            if (delta < THR || now - lastPingAt.current < MIN) return;
+            await playPreview(next);
+            lastPingAt.current = now;
+          }}
+          onPointerUp={async (e) => {
+            e.stopPropagation();
+            const v = Math.max(0, Math.min(1, Number(e.currentTarget.value) / 100));
+            if (!isMuted && v > 0) { await playPreview(v); lastPingAt.current = Date.now(); }
+          }}
+          onTouchEnd={async (e) => {
+            e.stopPropagation();
+            const v = Math.max(0, Math.min(1, Number(e.currentTarget.value) / 100));
+            if (!isMuted && v > 0) { await playPreview(v); lastPingAt.current = Date.now(); }
+          }}
+          className="w-full h-2 accent-pink-500"
+          aria-label="Volumen"
+        />
 
-              <div className="mt-3 text-right">
-                <button
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    if (Number(volume || 0) > 0) {
-                      setVolume(0);
-                    } else {
-                      toggleMute();
-                      if (Number(volume || 0) === 0) {
-                        const minV = 0.2;
-                        setVolume(minV);
-                        await playPreview(minV);
-                      }
-                    }
-                  }}
-                  className="text-[12px] text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 underline"
-                  title={effectiveMuted ? "Quitar silencio" : "Silenciar"}
-                >
-                  {effectiveMuted ? "Quitar silencio" : "Silenciar"}
-                </button>
-              </div>
-            </div>,
-            document.body
-          )}
+        <div className="mt-3 flex items-center justify-between">
+          <button
+            onClick={() => setOpenVol(false)}
+            className="text-[12px] text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 underline"
+            title="Cerrar"
+          >
+            Cerrar
+          </button>
+
+          <button
+            onClick={async (e) => {
+              e.stopPropagation();
+              if (Number(volume || 0) > 0) {
+                setVolume(0);
+              } else {
+                toggleMute();
+                if (Number(volume || 0) === 0) {
+                  const minV = 0.2;
+                  setVolume(minV);
+                  await playPreview(minV);
+                }
+              }
+            }}
+            className="text-[12px] text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 underline"
+            title={effectiveMuted ? "Quitar silencio" : "Silenciar"}
+          >
+            {effectiveMuted ? "Quitar silencio" : "Silenciar"}
+          </button>
+        </div>
+      </div>
+    </>,
+    document.body
+  )}
+
 
         {/* Nueva nota (desktop) */}
         <button
