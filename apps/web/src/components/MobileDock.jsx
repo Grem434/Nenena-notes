@@ -75,32 +75,6 @@ export default function MobileDock() {
           );
         })}
       </ul>
-<div className="flex items-center justify-center gap-3 px-2 py-1">
-  <button
-    type="button"
-    onClick={goAll} // “de otros” = vista general (todas)
-    className="min-w-[120px] px-3 py-2 rounded-full text-sm font-medium
-               border border-slate-300 bg-white text-slate-700
-               dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200
-               active:scale-[0.99] transition"
-    aria-label="Ver todas las notas"
-  >
-    de otros
-  </button>
-
-  <button
-    type="button"
-    onClick={goPersonal}
-    className="min-w-[120px] px-3 py-2 rounded-full text-sm font-medium
-               border border-slate-300 bg-white text-slate-700
-               dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200
-               active:scale-[0.99] transition"
-    aria-label="Ver notas personales"
-  >
-    personales
-  </button>
-</div>
-
-    </nav>
+<div     </nav>
   );
 }
