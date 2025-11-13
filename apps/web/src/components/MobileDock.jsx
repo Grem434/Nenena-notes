@@ -17,7 +17,6 @@ export default function MobileDock() {
   const filter = useNotesStore((s) => s.filter);
   const setFilter = useNotesStore((s) => s.setFilter);
 
-  // Atajos 1..5 (opcional en móvil)
   useEffect(() => {
     const onKey = (e) => {
       if (!e || e.repeat) return;
@@ -38,8 +37,9 @@ export default function MobileDock() {
     <nav
       className="md:hidden fixed inset-x-0 bottom-0 z-40 bg-white/90 dark:bg-slate-950/90 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-950/60 border-t border-slate-200 dark:border-slate-800"
       style={{
-        // pegado al borde pero respetando el notch/gesto de iPhone
-        bottom: "env(safe-area-inset-bottom, 0px)",
+        // El fondo llega HASTA el borde inferior real
+        bottom: 0,
+        // Solo acolchado interno para salvar el gesto/notch
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
       }}
     >
