@@ -3,18 +3,7 @@ import { useNotesStore } from "@/store/useNotesStore";
 import { cn } from "@/lib/utils";
 import { List, Clock, CheckCircle2, Box, Trash2 } from "lucide-react";
 
-/**
- * MobileDock — barra inferior (iOS safe area friendly)
- * - Se eleva por encima del gesto de "home" en iPhone usando env(safe-area-inset-bottom)
- * - Añadimos 10px extra para que no se solape con el gesto de subir apps recientes
- */
-const SHORTCUT = {
-  todas: "1",
-  pendiente: "2",
-  resuelta: "3",
-  archivadas: "4",
-  papelera: "5",
-};
+const SHORTCUT = { todas: "1", pendiente: "2", resuelta: "3", archivadas: "4", papelera: "5" };
 
 const TABS = [
   { key: "todas", label: "Todas", Icon: List },
@@ -28,7 +17,7 @@ export default function MobileDock() {
   const filter = useNotesStore((s) => s.filter);
   const setFilter = useNotesStore((s) => s.setFilter);
 
-  // Atajos (1..5) sólo en móvil para comodidad
+  // Atajos 1..5 (opcional en móvil)
   useEffect(() => {
     const onKey = (e) => {
       if (!e || e.repeat) return;
@@ -47,11 +36,11 @@ export default function MobileDock() {
 
   return (
     <nav
-      className="fixed inset-x-0 z-40 bg-white/90 dark:bg-slate-950/90 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-950/60 border-t border-slate-200 dark:border-slate-800 rounded-t-2xl shadow-[0_-6px_20px_rgba(0,0,0,0.06)]"
-      // Elevar por encima del gesto de iPhone y añadir 10px extra.
+      className="md:hidden fixed inset-x-0 bottom-0 z-40 bg-white/90 dark:bg-slate-950/90 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-950/60 border-t border-slate-200 dark:border-slate-800"
       style={{
-        bottom: "calc(env(safe-area-inset-bottom, 0px) + 0px)",
-        paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1px)",
+        // pegado al borde pero respetando el notch/gesto de iPhone
+        bottom: "env(safe-area-inset-bottom, 0px)",
+        paddingBottom: "env(safe-area-inset-bottom, 0px)",
       }}
     >
       <ul className="mx-auto max-w-[900px] grid grid-cols-5 gap-2 px-3 py-2">
