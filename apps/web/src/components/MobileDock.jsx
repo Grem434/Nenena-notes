@@ -3,6 +3,11 @@ import { useNotesStore } from "@/store/useNotesStore";
 import { cn } from "@/lib/utils";
 import { List, Clock, CheckCircle2, Box, Trash2 } from "lucide-react";
 
+/**
+ * MobileDock — barra inferior (iOS safe area friendly)
+ * - Se eleva por encima del gesto de "home" en iPhone usando env(safe-area-inset-bottom)
+ * - Añadimos 10px extra para que no se solape con el gesto de subir apps recientes
+ */
 const SHORTCUT = {
   todas: "1",
   pendiente: "2",
@@ -41,7 +46,14 @@ export default function MobileDock() {
   }, [setFilter]);
 
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-40 bg-white/90 dark:bg-slate-950/90 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-950/60 border-t border-slate-200 dark:border-slate-800">
+    <nav
+      className="fixed inset-x-0 z-40 bg-white/90 dark:bg-slate-950/90 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-950/60 border-t border-slate-200 dark:border-slate-800 rounded-t-2xl shadow-[0_-6px_20px_rgba(0,0,0,0.06)]"
+      // Elevar por encima del gesto de iPhone y añadir 10px extra.
+      style={{
+        bottom: "calc(env(safe-area-inset-bottom, 0px) + 10px)",
+        paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 4px)",
+      }}
+    >
       <ul className="mx-auto max-w-[900px] grid grid-cols-5 gap-2 px-3 py-2">
         {TABS.map(({ key, label, Icon }) => {
           const active = filter === key;
