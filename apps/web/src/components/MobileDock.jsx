@@ -50,8 +50,8 @@ export default function MobileDock() {
       className="fixed inset-x-0 z-40 bg-white/90 dark:bg-slate-950/90 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-950/60 border-t border-slate-200 dark:border-slate-800 rounded-t-2xl shadow-[0_-6px_20px_rgba(0,0,0,0.06)]"
       // Elevar por encima del gesto de iPhone y añadir 10px extra.
       style={{
-        bottom: "calc(env(safe-area-inset-bottom, 0px) + 6px)",
-        paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 3px)",
+        bottom: "calc(env(safe-area-inset-bottom, 0px) + 2px)",
+        paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1px)",
       }}
     >
       <ul className="mx-auto max-w-[900px] grid grid-cols-5 gap-2 px-3 py-2">
