@@ -1,80 +1,72 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useNotesStore } from "@/store/useNotesStore";
 import { cn } from "@/lib/utils";
 import { List, Clock, CheckCircle2, Box, Trash2 } from "lucide-react";
-import { goAll, goPersonal } from "@/lib/navBus";
 
 const SHORTCUT = {
-  "todas": "1",
-  "pendiente": "2",
-  "resuelta": "3",
-  "archivadas": "4",
-  "papelera": "5",
+  todas: "1",
+  pendiente: "2",
+  resuelta: "3",
+  archivadas: "4",
+  papelera: "5",
 };
+
+const TABS = [
+  { key: "todas", label: "Todas", Icon: List },
+  { key: "pendiente", label: "Pend.", Icon: Clock },
+  { key: "resuelta", label: "Res.", Icon: CheckCircle2 },
+  { key: "archivadas", label: "Archivo", Icon: Box },
+  { key: "papelera", label: "Papelera", Icon: Trash2 },
+];
 
 export default function MobileDock() {
   const filter = useNotesStore((s) => s.filter);
   const setFilter = useNotesStore((s) => s.setFilter);
 
-  const [hidden, setHidden] = useState(false);
+  // Atajos (1..5) sólo en móvil para comodidad
   useEffect(() => {
-    let lastY = window.scrollY;
-    const onScroll = () => {
-      const y = window.scrollY;
-      setHidden(y > lastY && y - lastY > 8);
-      lastY = y;
+    const onKey = (e) => {
+      if (!e || e.repeat) return;
+      const k = e.key?.toLowerCase();
+      for (const tab of TABS) {
+        if (SHORTCUT[tab.key] === k) {
+          e.preventDefault();
+          setFilter(tab.key);
+          break;
+        }
+      }
     };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  const items = [
-    { key: "todas", label: "Todas", Icon: List },
-    { key: "pendiente", label: "Pend.", Icon: Clock },
-    { key: "resuelta", label: "Res.", Icon: CheckCircle2 },
-    { key: "archivadas", label: "Archivo", Icon: Box },
-    { key: "papelera", label: "Papelera", Icon: Trash2 },
-  ];
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [setFilter]);
 
   return (
-    <nav
-      className={cn(
-        "md:hidden fixed bottom-0 left-0 right-0 z-30",
-        "bg-white/95 backdrop-blur border-t border-slate-200",
-        "transition-transform duration-300",
-        hidden ? "translate-y-full" : "translate-y-0"
-      )}
-      role="tablist"
-      aria-label="Buzones"
-    >
-      <ul className="flex items-stretch justify-between gap-1 px-2 py-1.5">
-        {items.map(({ key, label, Icon }) => {
+    <nav className="fixed bottom-0 inset-x-0 z-40 bg-white/90 dark:bg-slate-950/90 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-950/60 border-t border-slate-200 dark:border-slate-800">
+      <ul className="mx-auto max-w-[900px] grid grid-cols-5 gap-2 px-3 py-2">
+        {TABS.map(({ key, label, Icon }) => {
           const active = filter === key;
-          const title = `${label} (atajo: ${SHORTCUT[key]})`;
           return (
-            <li key={key} className="flex-1">
+            <li key={key} className="flex">
               <button
-                role="tab"
-                aria-selected={active}
+                type="button"
                 onClick={() => setFilter(key)}
                 className={cn(
-                  "w-full h-12 rounded-xl border text-[11px] font-medium",
-                  "flex flex-col items-center justify-center gap-0.5",
+                  "flex-1 flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-[13px]",
+                  "border transition active:scale-[0.99]",
                   active
-                    ? "bg-pink-50 border-pink-200 text-pink-700"
-                    : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    ? "bg-pink-50 text-pink-700 border-pink-200 dark:bg-pink-900/20 dark:text-pink-200 dark:border-pink-800"
+                    : "bg-white text-slate-600 border-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800"
                 )}
-                title={title}
+                aria-pressed={active}
                 aria-label={label}
-                aria-keyshortcuts={SHORTCUT[key]}
               >
-                <Icon size={18} aria-hidden="true" />
-                {label}
+                <Icon className="w-4 h-4" />
+                <span className="hidden xs:inline">{label}</span>
               </button>
             </li>
           );
         })}
       </ul>
-<div     </nav>
+    </nav>
   );
 }
