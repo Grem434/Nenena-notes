@@ -72,6 +72,53 @@ function useDebouncedValue(value, delay = 250) {
   return debounced;
 }
 
+// --- Bridge: responder lista de usuarios a la extensión ---
+function useNenenaUsersBridge() {
+  useEffect(() => {
+    function collectUsers() {
+      try {
+        // Usamos el store oficial de usuarios
+        const st = useUsersStore.getState?.();
+        const arr = Array.isArray(st?.users) ? st.users : [];
+        // Acepta string o { name }
+        return arr
+          .map(u => (typeof u === "string" ? u : (u?.name ?? "")))
+          .filter(Boolean);
+      } catch { return []; }
+    }
+
+    function normalize(list) {
+      const seen = new Map();
+      for (const name of list) {
+        const s = String(name).trim();
+        if (!s) continue;
+        const k = s.toLowerCase();
+        if (k === "todos") continue; // siempre se añade al final
+        if (!seen.has(k)) seen.set(k, s);
+      }
+      const ordered = Array.from(seen.values()).sort((a,b)=>
+        a.localeCompare(b, undefined, { sensitivity: "base" })
+      );
+      ordered.push("TODOS");
+      return ordered;
+    }
+
+    function onMessage(ev) {
+      const d = ev?.data;
+      if (!d || d.type !== "nenena:request-users") return;
+      try {
+        const users = normalize(collectUsers());
+        window.postMessage({ type: "nenena:users", users }, "*");
+      } catch {
+        window.postMessage({ type: "nenena:users", users: ["TODOS"] }, "*");
+      }
+    }
+
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+}
+
 export default function App() {
   const [authenticated, setAuthenticated] = useState(false);
   const [ready, setReady] = useState(false);
@@ -84,6 +131,9 @@ export default function App() {
   const [selectedPersonal, setSelectedPersonal] = useState(null);
   const [selectedRecipient, setSelectedRecipient] = useState(null);
   const [openUsers, setOpenUsers] = useState(false);
+  
+  // Habilita la respuesta de usuarios para la extensión (bridge)
+  useNenenaUsersBridge();
 
   const [isOnline, setIsOnline] = useState(
     typeof navigator !== "undefined" ? navigator.onLine : true
