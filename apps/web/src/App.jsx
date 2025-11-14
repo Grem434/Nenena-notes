@@ -72,31 +72,20 @@ function useDebouncedValue(value, delay = 250) {
   return debounced;
 }
 
-// --- Bridge: responder lista de usuarios a la extensión ---
-function useNenenaUsersBridge() {
+// --- Bridge: responder lista de usuarios a la extensión (derivado de notas) ---
+function useNenenaUsersBridgeFromNotes() {
+  // OJO: no usamos el hook dentro de collectUsers (evitamos render loops); leemos una snapshot en el efecto
   useEffect(() => {
-    function collectUsers() {
-      try {
-        // Usamos el store oficial de usuarios
-        const st = useUsersStore.getState?.();
-        const arr = Array.isArray(st?.users) ? st.users : [];
-        // Acepta string o { name }
-        return arr
-          .map(u => (typeof u === "string" ? u : (u?.name ?? "")))
-          .filter(Boolean);
-      } catch { return []; }
-    }
-
     function normalize(list) {
       const seen = new Map();
       for (const name of list) {
-        const s = String(name).trim();
+        const s = String(name || "").trim();
         if (!s) continue;
         const k = s.toLowerCase();
-        if (k === "todos") continue; // siempre se añade al final
+        if (k === "todos") continue; // lo añadimos al final
         if (!seen.has(k)) seen.set(k, s);
       }
-      const ordered = Array.from(seen.values()).sort((a,b)=>
+      const ordered = Array.from(seen.values()).sort((a, b) =>
         a.localeCompare(b, undefined, { sensitivity: "base" })
       );
       ordered.push("TODOS");
@@ -107,8 +96,19 @@ function useNenenaUsersBridge() {
       const d = ev?.data;
       if (!d || d.type !== "nenena:request-users") return;
       try {
-        const users = normalize(collectUsers());
+        // Snapshot de notas actual desde la store
+        const st = useNotesStore.getState?.();
+        const notes = Array.isArray(st?.notes) ? st.notes : [];
+
+        // Deriva usuarios de from/to
+        const names = new Set();
+        for (const n of notes) {
+          if (n?.from) names.add(String(n.from));
+          if (n?.to) names.add(String(n.to));
+        }
+        const users = normalize(Array.from(names));
         window.postMessage({ type: "nenena:users", users }, "*");
+        // console.log("[UsersBridge] responded", users);
       } catch {
         window.postMessage({ type: "nenena:users", users: ["TODOS"] }, "*");
       }
@@ -132,8 +132,8 @@ export default function App() {
   const [selectedRecipient, setSelectedRecipient] = useState(null);
   const [openUsers, setOpenUsers] = useState(false);
   
-  // Habilita la respuesta de usuarios para la extensión (bridge)
-  useNenenaUsersBridge();
+  // Habilita respuesta de usuarios para la extensión (derivado de notas)
+  useNenenaUsersBridgeFromNotes();
 
   const [isOnline, setIsOnline] = useState(
     typeof navigator !== "undefined" ? navigator.onLine : true
