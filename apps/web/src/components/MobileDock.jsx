@@ -13,13 +13,27 @@ const TABS = [
   { key: "papelera", label: "Papelera", Icon: Trash2 },
 ];
 
+// 👇 helper: ¿se está escribiendo en un control editable?
+function isTypingInEditable(e) {
+  if (!e) return false;
+  const t = e.target;
+  if (!t) return false;
+  if (t.isContentEditable) return true;
+  const tag = (t.tagName || "").toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select") return true;
+  return false;
+}
+
 export default function MobileDock() {
   const filter = useNotesStore((s) => s.filter);
   const setFilter = useNotesStore((s) => s.setFilter);
 
+  // Atajos 1..5 (sólo cuando NO se está tecleando en campos)
   useEffect(() => {
     const onKey = (e) => {
       if (!e || e.repeat) return;
+      if (e.defaultPrevented) return;
+      if (isTypingInEditable(e)) return; // 👈 evita robar dígitos mientras escribes
       const k = e.key?.toLowerCase();
       for (const tab of TABS) {
         if (SHORTCUT[tab.key] === k) {
@@ -37,10 +51,8 @@ export default function MobileDock() {
     <nav
       className="md:hidden fixed inset-x-0 bottom-0 z-40 bg-white/90 dark:bg-slate-950/90 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-950/60 border-t border-slate-200 dark:border-slate-800"
       style={{
-        // El fondo llega HASTA el borde inferior real
-        bottom: 0,
-        // Solo acolchado interno para salvar el gesto/notch
-        paddingBottom: "env(safe-area-inset-bottom, 0px)",
+        bottom: 0, // el fondo ocupa hasta abajo
+        paddingBottom: "env(safe-area-inset-bottom, 0px)", // respeta notch/gesto
       }}
     >
       <ul className="mx-auto max-w-[900px] grid grid-cols-5 gap-2 px-3 py-2">
